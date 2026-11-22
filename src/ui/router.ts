@@ -6,6 +6,8 @@ export type Route =
   | { name: "recipe"; id: string }
   | { name: "new" }
   | { name: "edit"; id: string }
+  | { name: "menu" }
+  | { name: "shopping" }
   | { name: "ingredients" }
   | { name: "categories" }
   | { name: "missing" };
@@ -15,6 +17,8 @@ export const paths = {
   newRecipe: "#/recetas/nueva",
   recipe: (id: string) => `#/recetas/${encodeURIComponent(id)}`,
   editRecipe: (id: string) => `#/recetas/${encodeURIComponent(id)}/editar`,
+  menu: "#/menu",
+  shopping: "#/compras",
   ingredients: "#/ingredientes",
   categories: "#/categorias",
 } as const;
@@ -32,6 +36,8 @@ export function parseHash(hash: string): Route {
   const [first, second, third] = segments;
 
   if (!first || (first === "recetas" && segments.length === 1)) return { name: "recipes" };
+  if (first === "menu" && segments.length === 1) return { name: "menu" };
+  if (first === "compras" && segments.length === 1) return { name: "shopping" };
   if (first === "ingredientes" && segments.length === 1) return { name: "ingredients" };
   if (first === "categorias" && segments.length === 1) return { name: "categories" };
   if (first === "recetas" && second === "nueva" && segments.length === 2) return { name: "new" };

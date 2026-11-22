@@ -113,4 +113,8 @@ export interface RecipeRepository {
   deleteIngredient(id: string): Promise<void>;
   getActiveMenu(): Promise<MenuEntry[]>;
   saveActiveMenu(entries: MenuEntry[]): Promise<void>;
+  addMenuBatch(recipeId: string): Promise<MenuEntry[]>;
+  setMenuBatchPortions(id: string, portions: number): Promise<MenuEntry[]>;
+  removeMenuBatch(id: string): Promise<MenuEntry[]>;
+  clearActiveMenu(): Promise<MenuEntry[]>;
 }

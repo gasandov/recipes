@@ -12,7 +12,11 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:e2e": "vite build --outDir node_modules/.cache/e2e-dist --emptyOutDir",
+    "typecheck:e2e": "tsc -p e2e/tsconfig.json",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium webkit"
   },
   "dependencies": {
     "@solidjs/web": "2.0.3",
@@ -21,6 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.65.1",
     "@solidjs/vite-plugin": "3.0.1",
     "@types/node": "24.19.2",
     "eslint": "10.15.0",

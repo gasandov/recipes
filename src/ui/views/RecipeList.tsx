@@ -1,7 +1,9 @@
 import { createMemo, createSignal, createUniqueId, For, Show } from "solid-js";
 import type { Recipe, RecipeFilters, TagId } from "../../contracts";
 import { filterRecipes } from "../../domain";
+import { AddToMenuButton } from "../components/AddToMenuButton";
 import { IngredientCombobox } from "../components/IngredientCombobox";
+import { InstallHelp } from "../components/InstallHelp";
 import { PhotoImage } from "../components/PhotoImage";
 import { emptyFilters } from "../state";
 import { paths } from "../router";
@@ -242,6 +244,10 @@ export function RecipeList() {
         </Show>
       </Show>
       <p class="hint">Tus recetas se guardan en este dispositivo. Si borras los datos del sitio en tu navegador, puedes perderlas.</p>
+      <details class="library-help">
+        <summary>Ayuda de instalación y almacenamiento</summary>
+        <InstallHelp />
+      </details>
     </>
   );
 }
@@ -277,6 +283,9 @@ function RecipeCard(props: { recipe: Recipe }) {
           </p>
         </div>
       </a>
+      <div class="card-actions">
+        <AddToMenuButton recipeId={props.recipe.id} recipeName={props.recipe.name} />
+      </div>
     </li>
   );
 }

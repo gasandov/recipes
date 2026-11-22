@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { openDB } from "idb";
 import { describe, expect, it, vi } from "vitest";
 import type { PhotoInput, Recipe, RecipeDraft } from "../contracts";
-import { createMenuEntry, convertMeasuredAmount, parseMeasuredAmount, parseRational } from "../domain";
+import { aggregateShoppingList, createMenuEntry, convertMeasuredAmount, parseMeasuredAmount, parseRational } from "../domain";
 import { databaseVersion, recipeDatabaseConnection } from "./database";
 import { createRecipeRepository } from "./repository";
 
@@ -175,6 +175,78 @@ describe("IndexedDB recipe repository", () => {
     expect(await reopened.getActiveMenu()).toHaveLength(2);
     await reopened.saveActiveMenu([]);
     expect(await repository.getActiveMenu()).toEqual([]);
+  });
+
+  it("adds independent batches from the saved recipe and preserves them through later recipe and catalog edits", async () => {
+    const { name, repository } = setup();
+    const flour = { ingredientId: "flour", amount: parseMeasuredAmount("500", "gram") };
+    const original = await repository.saveRecipe(draft({ name: "Bread", ingredients: [flour] }));
+    const nameOnly = await repository.saveRecipe(draft({ name: "Tea" }));
+    await repository.addMenuBatch(original.id);
+    const [first, second] = await repository.addMenuBatch(original.id);
+    expect(first.id).not.toBe(second.id);
+    expect(first.portions).toBe(4);
+    expect(second).toEqual({ ...first, id: second.id });
+    await repository.addMenuBatch(nameOnly.id);
+
+    const reopened = createRecipeRepository(name);
+    await reopened.setMenuBatchPortions(first.id, 8);
+    await reopened.setMenuBatchPortions(first.id, 3);
+    const menu = await reopened.setMenuBatchPortions(first.id, 8);
+    expect(menu).toEqual([
+      { ...first, portions: 8 }, second,
+      expect.objectContaining({ sourceRecipeId: nameOnly.id, portions: 4, ingredients: [] }),
+    ]);
+    expect(aggregateShoppingList(menu)[0].measured[0].amount).toEqual(parseMeasuredAmount("1500", "gram"));
+    expect((await repository.getLibrary()).recipes.find(({ id }) => id === original.id)).toEqual(original);
+
+    await repository.saveRecipe(draft({ id: original.id, name: "New bread" }));
+    await repository.saveIngredient({ id: "flour", name: "Other flour" });
+    expect(await reopened.getActiveMenu()).toEqual(menu);
+    await repository.deleteRecipe(original.id);
+    await repository.deleteIngredient("flour");
+    expect(await reopened.getActiveMenu()).toEqual(menu);
+    await expect(reopened.addMenuBatch(original.id)).rejects.toThrow("no longer exists");
+
+    const afterRemoval = await reopened.removeMenuBatch(second.id);
+    expect(aggregateShoppingList(afterRemoval)[0].measured[0].amount).toEqual(parseMeasuredAmount("1000", "gram"));
+    expect(await reopened.clearActiveMenu()).toEqual([]);
+    expect(await repository.getActiveMenu()).toEqual([]);
+  });
+
+  it("serializes concurrent menu changes across connections and cannot restore a removed batch through an edit", async () => {
+    const { name, repository } = setup();
+    const other = createRecipeRepository(name);
+    const recipe = await repository.saveRecipe(draft());
+    await Promise.all([repository.addMenuBatch(recipe.id), other.addMenuBatch(recipe.id)]);
+    const [first, second] = await repository.getActiveMenu();
+    expect(first.id).not.toBe(second.id);
+
+    await Promise.all([repository.setMenuBatchPortions(first.id, 8), other.setMenuBatchPortions(second.id, 6)]);
+    expect(await other.getActiveMenu()).toEqual([{ ...first, portions: 8 }, { ...second, portions: 6 }]);
+    await expect(repository.setMenuBatchPortions(first.id, 0)).rejects.toThrow("Portions");
+
+    await Promise.all([repository.removeMenuBatch(first.id), other.addMenuBatch(recipe.id)]);
+    await expect(other.setMenuBatchPortions(first.id, 10)).rejects.toThrow("no longer exists");
+    const remaining = await repository.getActiveMenu();
+    expect(remaining).toHaveLength(2);
+    expect(remaining[0]).toEqual({ ...second, portions: 6 });
+    expect(remaining[1].id).not.toBe(first.id);
+  });
+
+  it("leaves the saved batch intact when a menu write fails", async () => {
+    const { repository } = setup();
+    const recipe = await repository.saveRecipe(draft());
+    const menu = await repository.addMenuBatch(recipe.id);
+    const put = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(() => {
+      throw new DOMException("Injected write failure", "QuotaExceededError");
+    });
+    try {
+      await expect(repository.setMenuBatchPortions(menu[0].id, 8)).rejects.toMatchObject({ name: "QuotaExceededError" });
+    } finally {
+      put.mockRestore();
+    }
+    expect(await repository.getActiveMenu()).toEqual(menu);
   });
 
   it("upgrades v1 in place, retaining earlier recipes and photos", async () => {

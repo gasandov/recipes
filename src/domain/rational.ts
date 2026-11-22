@@ -68,14 +68,14 @@ export function parseRational(text: string): Rational {
   throw new RangeError("Enter an integer, decimal, or fraction.");
 }
 
-export function formatRational(value: Rational): string {
+export function formatRational(value: Rational, preferDecimal = false): string {
   const [numerator, denominator] = parts(normalizeRational(value));
   const whole = numerator / denominator;
   const remainder = numerator % denominator;
   if (remainder === 0n) return whole.toString();
 
   // Preserve familiar cooking fractions and keep long decimals compact.
-  if (denominator !== 2n && denominator !== 4n && denominator !== 8n) {
+  if (preferDecimal || (denominator !== 2n && denominator !== 4n && denominator !== 8n)) {
     for (let places = 1, scale = 10n; places <= 6; places++, scale *= 10n) {
       if ((remainder * scale) % denominator === 0n) {
         const digits = ((remainder * scale) / denominator).toString().padStart(places, "0");
@@ -99,6 +99,12 @@ export function multiplyRational(left: Rational, right: Rational): Rational {
   const [a, b] = parts(left);
   const [c, d] = parts(right);
   return rational(a * c, b * d);
+}
+
+export function addRational(left: Rational, right: Rational): Rational {
+  const [a, b] = parts(left);
+  const [c, d] = parts(right);
+  return rational(a * d + c * b, b * d);
 }
 
 export function divideRational(left: Rational, right: Rational): Rational {

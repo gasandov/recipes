@@ -8,23 +8,43 @@ import { appName } from "./text";
 import { useApp } from "./use-app";
 import { Categories } from "./views/Categories";
 import { Ingredients } from "./views/Ingredients";
+import { Menu } from "./views/Menu";
 import { RecipeDetail } from "./views/RecipeDetail";
 import { RecipeForm } from "./views/RecipeForm";
 import { RecipeList } from "./views/RecipeList";
+import { ShoppingList } from "./views/ShoppingList";
 import "./styles.css";
 
 type NavItem = { label: string; href: string; active: (route: Route) => boolean };
 
-// Phase 3 adds the menu and shopping list entries here.
 const navItems: NavItem[] = [
   {
     label: "Recetas",
     href: paths.recipes,
     active: (route) => ["recipes", "recipe", "new", "edit"].includes(route.name),
   },
+  { label: "Menú", href: paths.menu, active: (route) => route.name === "menu" },
+  { label: "Lista de compras", href: paths.shopping, active: (route) => route.name === "shopping" },
+];
+
+const catalogItems: NavItem[] = [
   { label: "Ingredientes", href: paths.ingredients, active: (route) => route.name === "ingredients" },
   { label: "Categorías", href: paths.categories, active: (route) => route.name === "categories" },
 ];
+
+function NavLinks(props: { items: NavItem[]; route: Route }) {
+  return (
+    <ul>
+      <For each={props.items}>
+        {(item) => (
+          <li>
+            <a href={item.href} aria-current={item.active(props.route) ? "page" : undefined}>{item.label}</a>
+          </li>
+        )}
+      </For>
+    </ul>
+  );
+}
 
 function titleFor(route: Route): string {
   switch (route.name) {
@@ -35,6 +55,10 @@ function titleFor(route: Route): string {
       return "Nueva receta";
     case "edit":
       return "Editar receta";
+    case "menu":
+      return "Menú";
+    case "shopping":
+      return "Lista de compras";
     case "ingredients":
       return "Ingredientes";
     case "categories":
@@ -83,18 +107,11 @@ function Shell() {
         <a class="brand" href={paths.recipes}>
           {appName}
         </a>
-        <nav class={["main-nav", { "is-hidden-mobile": isForm() }]} aria-label="Principal">
-          <ul>
-            <For each={navItems}>
-              {(item) => (
-                <li>
-                  <a href={item.href} aria-current={item.active(route()) ? "page" : undefined}>
-                    {item.label}
-                  </a>
-                </li>
-              )}
-            </For>
-          </ul>
+        <nav class={["app-nav main-nav", { "is-hidden-mobile": isForm() }]} aria-label="Principal">
+          <NavLinks items={navItems} route={route()} />
+        </nav>
+        <nav class={["app-nav catalog-nav", { "is-hidden-mobile": isForm() }]} aria-label="Catálogo">
+          <NavLinks items={catalogItems} route={route()} />
         </nav>
       </header>
       <main id="contenido" class="app-main">
@@ -154,6 +171,10 @@ function View(props: { route: Route }) {
     }
     case "ingredients":
       return <Ingredients />;
+    case "menu":
+      return <Menu />;
+    case "shopping":
+      return <ShoppingList />;
     case "categories":
       return <Categories />;
     case "missing":

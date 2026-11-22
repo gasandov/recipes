@@ -1,7 +1,7 @@
 import { createContext, createMemo, createSignal, onSettled } from "solid-js";
 import type { Accessor } from "solid-js";
 import type {
-  Category, Ingredient, Library, PhotoInput, Recipe, RecipeDraft, RecipeFilters,
+  Category, Ingredient, Library, MenuEntry, PhotoInput, Recipe, RecipeDraft, RecipeFilters,
 } from "../contracts";
 import { repository } from "../data/repository";
 
@@ -33,6 +33,7 @@ export type AppState = {
   snapshot: () => Library;
   ingredientsById: Accessor<Map<string, Ingredient>>;
   categoriesById: Accessor<Map<string, Category>>;
+  menu: Accessor<MenuEntry[]>;
   reload: () => Promise<boolean>;
   saveRecipe: (draft: RecipeDraft, photo?: PhotoInput | null) => Promise<Outcome<Recipe>>;
   deleteRecipe: (id: string) => Promise<boolean>;
@@ -40,6 +41,10 @@ export type AppState = {
   deleteCategory: (id: string) => Promise<boolean>;
   saveIngredient: (draft: Omit<Ingredient, "id"> & { id?: string }) => Promise<Outcome<Ingredient>>;
   deleteIngredient: (id: string) => Promise<boolean>;
+  addMenuBatch: (recipeId: string) => Promise<boolean>;
+  setMenuBatchPortions: (id: string, portions: number) => Promise<boolean>;
+  removeMenuBatch: (id: string) => Promise<boolean>;
+  clearActiveMenu: () => Promise<boolean>;
   filters: Accessor<RecipeFilters>;
   setFilters: (next: RecipeFilters) => void;
   notices: Accessor<Notice[]>;
@@ -58,7 +63,10 @@ let noticeId = 0;
 export function createAppState(): AppState {
   const [status, setStatus] = createSignal<LoadStatus>("loading");
   const [library, setLibrary] = createSignal<Library>(emptyLibrary);
+  const [menu, setMenu] = createSignal<MenuEntry[]>([]);
   let latestLibrary = emptyLibrary;
+  let menuQueue = Promise.resolve();
+  let menuChannel: BroadcastChannel | undefined;
   const [filters, setFilters] = createSignal<RecipeFilters>(emptyFilters);
   const [notices, setNotices] = createSignal<Notice[]>([]);
   const [pendingConfirm, setPendingConfirm] = createSignal<ConfirmRequest | undefined>(undefined);
@@ -74,18 +82,43 @@ export function createAppState(): AppState {
     if (kind === "success") setTimeout(() => dismissNotice(id), 6000);
   };
 
-  async function reload(): Promise<boolean> {
+  function updateMenu(operation: () => Promise<MenuEntry[]>, publish = false): Promise<boolean> {
+    // Apply reads and committed writes in order, including refreshes from other tabs.
+    const next = menuQueue.then(async () => {
+      try {
+        setMenu(await operation());
+      } catch (error) {
+        console.error("Could not update the active menu.", error);
+        return false;
+      }
+      if (publish) menuChannel?.postMessage("updated");
+      return true;
+    });
+    menuQueue = next.then(() => {});
+    return next;
+  }
+
+  async function reloadLibrary(): Promise<boolean> {
     try {
       latestLibrary = await repository.getLibrary();
       setLibrary(latestLibrary);
-      setStatus("ready");
       return true;
     } catch (error) {
       console.error("Could not load the recipe library.", error);
-      // Keep showing the last known library when a refresh fails after the first load.
-      if (status() !== "ready") setStatus("error");
       return false;
     }
+  }
+
+  async function reload(): Promise<boolean> {
+    const [libraryLoaded, menuLoaded] = await Promise.all([
+      reloadLibrary(),
+      updateMenu(repository.getActiveMenu),
+    ]);
+    const loaded = libraryLoaded && menuLoaded;
+    if (loaded) setStatus("ready");
+    // Keep showing the last known data when a refresh fails after the first load.
+    else if (status() !== "ready") setStatus("error");
+    return loaded;
   }
 
   /** Runs a write, logs the original error, and refreshes the library after a success. */
@@ -97,7 +130,7 @@ export function createAppState(): AppState {
       console.error("A repository write failed.", error);
       return { ok: false };
     }
-    if (!(await reload())) {
+    if (!(await reloadLibrary())) {
       notify("error", "Se guardó el cambio, pero no pudimos actualizar la pantalla. Recarga la página.");
     }
     return { ok: true, value };
@@ -106,7 +139,15 @@ export function createAppState(): AppState {
   const succeeded = async (operation: () => Promise<unknown>) => (await write(operation)).ok;
 
   onSettled(() => {
+    if (typeof BroadcastChannel !== "undefined") {
+      menuChannel = new BroadcastChannel("recetario-menu");
+      menuChannel.onmessage = () => void updateMenu(repository.getActiveMenu);
+    }
     void reload();
+    return () => {
+      menuChannel?.close();
+      menuChannel = undefined;
+    };
   });
 
   return {
@@ -115,6 +156,7 @@ export function createAppState(): AppState {
     snapshot: () => latestLibrary,
     ingredientsById,
     categoriesById,
+    menu,
     reload,
     saveRecipe: (draft, photo) => write(() => repository.saveRecipe(draft, photo)),
     deleteRecipe: (id) => succeeded(() => repository.deleteRecipe(id)),
@@ -122,6 +164,10 @@ export function createAppState(): AppState {
     deleteCategory: (id) => succeeded(() => repository.deleteCategory(id)),
     saveIngredient: (draft) => write(() => repository.saveIngredient(draft)),
     deleteIngredient: (id) => succeeded(() => repository.deleteIngredient(id)),
+    addMenuBatch: (recipeId) => updateMenu(() => repository.addMenuBatch(recipeId), true),
+    setMenuBatchPortions: (id, portions) => updateMenu(() => repository.setMenuBatchPortions(id, portions), true),
+    removeMenuBatch: (id) => updateMenu(() => repository.removeMenuBatch(id), true),
+    clearActiveMenu: () => updateMenu(repository.clearActiveMenu, true),
     filters,
     setFilters: (next) => setFilters(next),
     notices,

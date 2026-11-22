@@ -1,9 +1,9 @@
 import { ingredientClassifications } from "../contracts";
 import type {
-  Category, Ingredient, PhotoInput, Recipe, RecipeDraft, RecipeRepository,
+  Category, Ingredient, MenuEntry, PhotoInput, Recipe, RecipeDraft, RecipeRepository,
 } from "../contracts";
-import { normalizeMenuEntry } from "../domain/menu";
-import { nonblank, normalizeDensity, normalizeRecipe } from "../domain/recipes";
+import { createMenuEntry, normalizeMenuEntry } from "../domain/menu";
+import { nonblank, normalizeDensity, normalizeRecipe, validatePortions } from "../domain/recipes";
 import { activeMenuKey, databaseName, recipeDatabaseConnection, writeTransaction } from "./database";
 import { requestPersistentStorage } from "./persistent-storage";
 
@@ -18,6 +18,15 @@ function validatePhoto(photo: PhotoInput): void {
 
 export function createRecipeRepository(name = databaseName): RecipeRepository {
   const getDatabase = recipeDatabaseConnection(name);
+
+  async function changeMenu(change: (entries: MenuEntry[]) => MenuEntry[]): Promise<MenuEntry[]> {
+    return writeTransaction(await getDatabase(), ["menu"], async (tx) => {
+      const menu = tx.objectStore("menu");
+      const entries = change((await menu.get(activeMenuKey))?.entries ?? []);
+      await menu.put({ id: activeMenuKey, entries });
+      return entries;
+    });
+  }
 
   return {
     async getLibrary() {
@@ -171,6 +180,44 @@ export function createRecipeRepository(name = databaseName): RecipeRepository {
         throw new RangeError("Menu entry IDs must be unique.");
       }
       await (await getDatabase()).put("menu", { id: activeMenuKey, entries: snapshots });
+    },
+
+    async addMenuBatch(recipeId) {
+      const id = crypto.randomUUID();
+      const entries = await writeTransaction(await getDatabase(), ["menu", "recipes", "ingredients"], async (tx) => {
+        const menu = tx.objectStore("menu");
+        const [active, recipe] = await Promise.all([
+          menu.get(activeMenuKey),
+          tx.objectStore("recipes").get(recipeId),
+        ]);
+        if (!recipe) throw new RangeError("The recipe no longer exists.");
+
+        const ingredients = tx.objectStore("ingredients");
+        const ids = [...new Set(recipe.ingredients.map((line) => line.ingredientId))];
+        const catalog = await Promise.all(ids.map((ingredientId) => ingredients.get(ingredientId)));
+        const batch = createMenuEntry(recipe, catalog.filter((ingredient) => ingredient !== undefined), id);
+        const entries = [...(active?.entries ?? []), batch];
+        await menu.put({ id: activeMenuKey, entries });
+        return entries;
+      });
+      requestPersistentStorage();
+      return entries;
+    },
+
+    async setMenuBatchPortions(id, portions) {
+      validatePortions(portions);
+      return changeMenu((entries) => {
+        if (!entries.some((entry) => entry.id === id)) throw new RangeError("The menu batch no longer exists.");
+        return entries.map((entry) => entry.id === id ? { ...entry, portions } : entry);
+      });
+    },
+
+    removeMenuBatch(id) {
+      return changeMenu((entries) => entries.filter((entry) => entry.id !== id));
+    },
+
+    clearActiveMenu() {
+      return changeMenu(() => []);
     },
   };
 }

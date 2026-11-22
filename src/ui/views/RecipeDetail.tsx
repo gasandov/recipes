@@ -1,23 +1,12 @@
 import { createMemo, createSignal, createUniqueId, For, Show } from "solid-js";
 import { RECIPE_PORTIONS } from "../../contracts";
 import type { MeasuredAmount, Recipe, RecipeIngredient, UnitId } from "../../contracts";
-import { compareRational, convertMeasuredAmount, formatMeasuredAmount, normalizeSourceUrl, usesDensity } from "../../domain";
+import { convertMeasuredAmount, defaultMetricUnit, formatMeasuredAmount, normalizeSourceUrl, usesDensity } from "../../domain";
+import { AddToMenuButton } from "../components/AddToMenuButton";
 import { PhotoImage } from "../components/PhotoImage";
 import { navigate, paths } from "../router";
 import { approximateDecimal, tagLabels, orderedUnits, unitLabel, unitOptionLabel } from "../text";
 import { useApp } from "../use-app";
-
-const thousand = { numerator: "1000", denominator: "1" };
-
-/** Opens large metric amounts in the larger unit, like 1000 g as 1 kg. Stored amounts are unchanged. */
-function defaultUnit(amount: MeasuredAmount): UnitId {
-  const largest = amount.max ?? amount.min;
-  if (compareRational(largest, thousand) >= 0) {
-    if (amount.unit === "gram") return "kilogram";
-    if (amount.unit === "milliliter") return "liter";
-  }
-  return amount.unit;
-}
 
 export function RecipeDetail(props: { id: string }) {
   const app = useApp();
@@ -85,6 +74,7 @@ function RecipeView(props: { recipe: Recipe; onDelete: () => void }) {
       <header class="detail-head">
         <h1 tabindex="-1">{props.recipe.name}</h1>
         <div class="actions">
+          <AddToMenuButton recipeId={props.recipe.id} recipeName={props.recipe.name} primary />
           <a class="btn" href={paths.editRecipe(props.recipe.id)}>
             Editar
           </a>
@@ -181,7 +171,7 @@ function IngredientRow(props: { line: RecipeIngredient }) {
   const shown = createMemo(() => {
     const amount = measured();
     if (!amount) return undefined;
-    const unit = chosen() ?? defaultUnit(amount);
+    const unit = chosen() ?? defaultMetricUnit(amount);
     if (unit === amount.unit) return { amount, converted: false };
     const result = convertMeasuredAmount(amount, unit, ingredient()?.density);
     return result ? { amount: result, converted: true } : { amount, converted: false };

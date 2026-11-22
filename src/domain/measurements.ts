@@ -7,14 +7,15 @@ import {
 type Unit = { dimension: "mass" | "volume" | "piece" | "pinch" | "bunch"; factor: Rational };
 
 const one = parseRational("1");
+const thousand = parseRational("1000");
 
 // Base units are grams and milliliters. Cups and spoons follow Profeco.
 // The ounce factors use the international pound and U.S. liquid gallon definitions.
 export const units: Readonly<Record<UnitId, Unit>> = {
   gram: { dimension: "mass", factor: one },
-  kilogram: { dimension: "mass", factor: parseRational("1000") },
+  kilogram: { dimension: "mass", factor: thousand },
   milliliter: { dimension: "volume", factor: one },
-  liter: { dimension: "volume", factor: parseRational("1000") },
+  liter: { dimension: "volume", factor: thousand },
   cup: { dimension: "volume", factor: parseRational("250") },
   tablespoon: { dimension: "volume", factor: parseRational("15") },
   teaspoon: { dimension: "volume", factor: parseRational("5") },
@@ -45,9 +46,18 @@ export function parseMeasuredAmount(text: string, unit: UnitId): MeasuredAmount 
   return normalizeMeasuredAmount(amount);
 }
 
-export function formatMeasuredAmount(amount: MeasuredAmount): string {
-  const min = formatRational(amount.min);
-  return amount.max ? `${min}–${formatRational(amount.max)}` : min;
+export function formatMeasuredAmount(amount: MeasuredAmount, preferDecimal = false): string {
+  const min = formatRational(amount.min, preferDecimal);
+  return amount.max ? `${min}–${formatRational(amount.max, preferDecimal)}` : min;
+}
+
+/** Displays large metric amounts in the larger unit, using the upper endpoint of a range. */
+export function defaultMetricUnit(amount: MeasuredAmount): UnitId {
+  if (compareRational(amount.max ?? amount.min, thousand) >= 0) {
+    if (amount.unit === "gram") return "kilogram";
+    if (amount.unit === "milliliter") return "liter";
+  }
+  return amount.unit;
 }
 
 export function scaleMeasuredAmount(amount: MeasuredAmount, factor: Rational): MeasuredAmount {
