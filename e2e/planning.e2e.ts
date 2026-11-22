@@ -1,18 +1,12 @@
 import { expect, press, test } from "./support/app";
-import type { App } from "./support/app";
 
 /** Matches a decimal with either separator and a range with a hyphen or an en dash. */
 const decimal = (value: string) => value.replace(".", "[.,]");
 
-async function requirePlanningViews(app: App): Promise<void> {
-  await app.goto("#/menu");
-  const heading = await app.page.getByRole("heading", { level: 1 }).innerText();
-  test.skip(heading === "Página no encontrada", "The Phase 3 #/menu view is not in this build yet.");
-}
-
 test.describe("menu and shopping list", () => {
-  test.beforeEach(async ({ app }) => {
-    await requirePlanningViews(app);
+  test.beforeEach(async ({ app, page }) => {
+    await app.goto("#/menu");
+    await expect(page.getByRole("heading", { level: 1, name: "Menú", exact: true })).toBeVisible();
   });
 
   test("navigation offers Menú and Lista de compras with Spanish empty states", async ({ app, page }) => {

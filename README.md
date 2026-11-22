@@ -1,6 +1,6 @@
 # Recetario
 
-A personal, installable web app for saving recipes, planning a weekly menu, and calculating a shopping list. It is a client-only PWA built with Solid 2, TypeScript, and Vite. All data lives in the browser's IndexedDB; there is no server, account, or sync. The app UI is in Mexican Spanish (`es-MX`); code, tests, and documentation are in English. See [PLAN.md](PLAN.md) for scope and [FUTURE.md](FUTURE.md) for post-v1 work.
+A personal, installable web app for saving recipes, planning a weekly menu, and calculating a shopping list. It is a client-only PWA built with Solid 2, TypeScript, and Vite. User data lives in the browser's IndexedDB. The UI is in Mexican Spanish (`es-MX`), and code, tests, and documentation are in English. See the [implementation plan](PLAN.md) and the [post-v1 backlog](FUTURE.md).
 
 ## Technical setup
 
@@ -27,64 +27,66 @@ npm run typecheck:e2e      # type-check the tests
 npx playwright test e2e/planning.e2e.ts --project=iphone-webkit   # a single spec or project
 ```
 
-How it works:
+#### Test setup
 
 - `npm run build:e2e` builds into `node_modules/.cache/e2e-dist`, so it never touches `dist/` or a preview server you have running.
 - `e2e/support/server.mjs` serves that build on `127.0.0.1:4317` (plus one private port per project for the update spec) with deployment-like headers: `no-cache` for `index.html` and `sw.js`, immutable caching for hashed `assets/`, and `application/manifest+json` for the manifest.
 - Each test gets a fresh browser context, so IndexedDB and the service worker start empty.
 - The network is never used. Requests to any host other than `127.0.0.1` are blocked, except `recetas.example`, which answers with a local fixture page so the recipe source link can be opened and asserted without leaving the machine.
-- Projects: `desktop-chromium` (Desktop Chrome), `android-chromium` (Pixel 7 emulation), and `iphone-webkit` (iPhone 15 emulation on WebKit). Touch projects use `tap()` instead of `click()` (see `press()` in `e2e/support/app.ts`); WebKit's iPhone emulation has hit-test problems with synthetic mouse clicks.
+- The projects are `desktop-chromium` (Desktop Chrome), `android-chromium` (Pixel 7 emulation), and `iphone-webkit` (iPhone 15 emulation on WebKit). Touch projects use `tap()` through `press()` in `e2e/support/app.ts`.
 - Test files are named `*.e2e.ts` so Vitest does not collect them. Reports and traces go to `node_modules/.cache/e2e-results`.
 
-What the specs cover:
+#### Coverage
 
 | Spec | Coverage |
 | --- | --- |
-| `library` | Name-only recipe; full recipe with photo, steps, categories, tags, source link, and four-portion scaling; step reordering; display-unit change; URL validation; delete with confirmation; search (case and accent insensitive) and combined filters, including an ingredient filter matching its cuts. |
-| `planning` | Phase 3 exit criteria through the UI: `500 g + 1 kg = 1.5 kg`, `2 + 2 eggs = 4`, `2–3 + 1 chiles = 3–4`, chicken cuts stay separate, cup ↔ 250 ml, a `0.8 g/ml` equivalence aggregating to about 160 g, separate amounts without an equivalence, independent and repeated batches, portion validation, zero-ingredient recipes, recipe edit and deletion after batching, clearing the menu, reload and offline. Skipped automatically only if `#/menu` does not exist in the build. |
-| `persistence` | Reload and a new page in the same browser keep recipes and photos; a failed IndexedDB write keeps the form and can be retried. |
-| `offline` | After the first load: shell reopens offline; create and edit a recipe with a photo offline; the source link opens after reconnecting. |
-| `update` | A new release (simulated by a different `sw.js` revision) waits for the app to close, then replaces the old cache; recipes, photos, the menu, and the shopping list are intact and still work offline. |
+| `library` | Name-only and complete recipes, photos, step reordering, categories, tags, source links, four-portion scaling, display units, deletion, accent-insensitive search, and combined filters. |
+| `planning` | Phase 3 exit criteria through the UI: `500 g + 1 kg = 1.5 kg`, `2 + 2 eggs = 4`, `2–3 + 1 chiles = 3–4`, chicken cuts stay separate, cup ↔ 250 ml, a `0.8 g/ml` equivalence aggregating to about 160 g, separate amounts without an equivalence, independent and repeated batches, portion validation, zero-ingredient recipes, recipe edit and deletion after batching, clearing the menu, reload and offline. |
+| `persistence` | Recipes and photos survive a reload and a new page in the same browser. After a failed IndexedDB write, the form retains its values for a retry. |
+| `offline` | Reopen the shell and create or edit a recipe with a photo offline. Follow the source link after reconnecting. |
+| `update` | A simulated release replaces the old cache after the app closes. Recipes, photos, the menu, and the shopping list remain available offline. |
 | `accessibility` | Skip link, focus on route change, keyboard-only recipe entry, error summary links, dialog focus, no horizontal overflow at 320 px on every view, minimum tap targets, Spanish-only chrome. |
 | `install-help` | Opens and checks the Spanish installation and storage help in the recipe library. |
 
 ## Static HTTPS deployment
 
-The build is a folder of static files; any static host works.
+The build is a folder of files ready for static hosting.
 
 1. `npm ci && npm run build`, then publish the contents of `dist/`.
 2. **Serve over HTTPS.** Service workers and installation require a secure context. Loopback addresses such as `localhost` are suitable for local tests.
 3. **Keep one stable origin.** IndexedDB is per origin, so moving to another domain, subdomain, or scheme starts with an empty library. The app can run from a subdirectory because assets use relative URLs (`base: "./"`) and routing uses the URL hash, so no rewrite rules are needed.
-4. Recommended headers:
+4. Configure these headers where the host supports them.
    - `index.html`, `sw.js`, and `manifest.webmanifest`: `Cache-Control: no-cache` (always revalidate). A stale `sw.js` delays updates.
    - `assets/*` (hashed filenames): `Cache-Control: public, max-age=31536000, immutable`.
-   - `manifest.webmanifest`: `Content-Type: application/manifest+json`; `sw.js`: a JavaScript content type.
+   - Serve `manifest.webmanifest` as `application/manifest+json` and `sw.js` as JavaScript.
 5. GitHub Pages serves the project at [gasandov.github.io/recipes](https://gasandov.github.io/recipes/). The publishing source is the root of the `gh-pages` branch. Run type checks, lint, Vitest, and the browser suite before releasing. Publish the contents of `dist/` at the root of `gh-pages` with an empty `.nojekyll` file. Keep application source on `main`. The service worker requests fresh copies of files when it builds a new precache, so the GitHub Pages cache policy may delay when a release first appears.
-6. Do not deploy a build that cannot reach every file listed in `sw.js`; the service worker precaches them all and fails to install if one is missing.
+6. Publish every file listed in `sw.js`. The service worker needs them all to finish installing the precache.
 
 ### How updates reach people
 
-The build writes `sw.js` with a content revision and the list of files to precache. A new deployment changes the revision, so browsers install the new worker next to the old one. The worker does not call `skipWaiting()`, so the new version takes over only after every window of the app is closed and the app is opened again (with an installed app: close it fully, then reopen). Until then the old, complete version keeps working. The old cache is deleted when the new worker activates. IndexedDB data is never touched by updates; a future change to the database schema must ship its migration in the same release. The Spanish install help tells people this.
+The build writes `sw.js` with a content revision and the list of files to precache. A new deployment changes the revision, so browsers install the new worker next to the old one. The current version serves open tabs until the user closes every tab and installed app window. The new worker removes the old asset cache when it activates. Data stays in IndexedDB across releases. Ship the corresponding migration with any future database schema change.
 
 ## Supported browsers
 
 Automated tests use **Playwright 1.65.1** on macOS with Chromium (desktop viewport and Pixel 7 emulation) and WebKit (iPhone 15 emulation). An Android emulator also reopened a populated shopping list after Chrome restarted with the local server stopped.
 
+On the deployed GitHub Pages origin, Chrome reported no installation errors. The HTTPS smoke test opened the installation help, saved a recipe, scaled a menu batch, and reopened its shopping list offline.
+
 | Target | Status |
 | --- | --- |
 | Chrome / Edge, desktop and Android (current) | Automated on Chromium. Real Android device check pending. |
-| Safari on iOS and iPadOS (current) | Automated on WebKit emulation. Real iPhone check pending; the minimum iOS version for home-screen installation is unverified, so confirm it on the device. |
-| Safari on macOS (current) | Same WebKit engine as the iPhone emulation; not tested separately. The in-app help mentions "Agregar al Dock", which needs a recent macOS; its minimum version is unverified. |
+| Safari on iOS and iPadOS (current) | Automated on WebKit emulation. Home-screen installation on physical devices remains pending. |
+| Safari on macOS (current) | Desktop Safari and the in-app "Agregar al Dock" instructions remain pending device verification. |
 | Firefox desktop | Pending verification. |
 
-Requirements: IndexedDB, service workers, `createImageBitmap` or `HTMLImageElement.decode`, and canvas encoding for photo resizing. Private windows may block or discard storage; the app reports a save failure instead of claiming success.
+The app uses IndexedDB and service workers. Photo resizing uses canvas encoding with `createImageBitmap` or `HTMLImageElement.decode`. If a private window blocks writes, the app reports the failure in Spanish.
 
 ### Not verified
 
 - Home-screen installation, restart behavior, and airplane mode on real iOS and Android devices.
 - Whether iOS keeps the home-screen app's storage separate from Safari's on the target iOS version (the Spanish help warns that it may).
 - Storage eviction under real memory pressure, and browsers other than those above.
-- The deployed HTTPS origin: tests run against a local server with the headers described above.
+- The full cross-browser suite runs locally. Live deployment verification covers the Chrome smoke test above.
 
 ## Device checklist (run on the deployed HTTPS origin)
 
@@ -95,13 +97,13 @@ Use a clean browser profile or device state for the first pass. Mark each item p
 - [ ] Open the app online, wait for it to load, and add it to the home screen as described in the in-app help.
 - [ ] Create a recipe with a photo, ingredients, and steps. Close the app completely, reopen it, and confirm the recipe and photo remain.
 - [ ] Turn on airplane mode. Open the app from the home screen. Create and edit a recipe, add a photo, add it to the menu, change portions, and open `Lista de compras`.
-- [ ] Turn airplane mode off and open a recipe's source link; it opens in the browser.
+- [ ] Turn airplane mode off and confirm that a recipe's source link opens in the browser.
 - [ ] Check whether recipes created in Safari also appear in the home-screen app (expected: they may not).
 
 **Android (Chrome)**
 
 - [ ] Install from the menu (`Instalar app`), open the installed app, and repeat the creation, restart, airplane-mode, and source-link checks above.
-- [ ] Rotate the device and use a narrow window; nothing should scroll sideways.
+- [ ] Rotate the device and check that the layout fits a narrow window.
 
 **Desktop (Chrome or Edge, and Safari)**
 
@@ -117,7 +119,7 @@ Use a clean browser profile or device state for the first pass. Mark each item p
 **Local storage and failure handling**
 
 - [ ] Clear site data in the browser and confirm the app opens empty without errors.
-- [ ] Open the app in a private window; saving either works or reports a clear Spanish error, never a false success.
+- [ ] Try saving in a private window. Confirm it succeeds or reports a clear Spanish error.
 - [ ] Read the in-app installation and storage help (Spanish) and confirm each instruction matches what the device actually shows.
 
 ## Project layout
