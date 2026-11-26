@@ -836,6 +836,12 @@ button.chip {
   margin: 0;
 }
 
+.menu-batch h2 a {
+  display: inline-block;
+  min-height: 24px;
+  min-width: 24px;
+}
+
 .batch-form {
   margin-top: 0.75rem;
 }

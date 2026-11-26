@@ -15,7 +15,8 @@ concurrency:
 jobs:
   build:
     name: Verify and build
-    runs-on: ubuntu-24.04
+    # Match the supported macOS browser suite, including WebKit video decoding.
+    runs-on: macos-15
     timeout-minutes: 20
     permissions:
       contents: read
