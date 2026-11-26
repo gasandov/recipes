@@ -1,4 +1,4 @@
-self.precache = {"revision":"cb62f53e033536f5","assets":["assets/index-Bixkec85.css","assets/index-DV9GG66O.js","index.html","manifest.webmanifest","icons/icon-192.png","icons/icon-512.png","icons/icon-maskable.png","icons/apple-touch-icon.png"]};
+self.precache = {"revision":"3fa111cd70ecb206","assets":["assets/index-B2C-Cdz7.js","assets/index-BJLZrnzi.css","index.html","manifest.webmanifest","icons/icon-192.png","icons/icon-512.png","icons/icon-maskable.png","icons/apple-touch-icon.png"]};
 // The build inserts the asset list and its content revision above this script.
 const { revision, assets } = self.precache;
 const scope = self.registration.scope;
