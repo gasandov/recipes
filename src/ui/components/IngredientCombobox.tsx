@@ -143,6 +143,12 @@ export function IngredientCombobox(props: Props) {
         placeholder={props.placeholder}
         readonly={busy()}
         value={props.value}
+        onFocus={() => {
+          if (!props.selectedId && props.value.trim()) {
+            setActive(0);
+            setOpen(true);
+          }
+        }}
         onInput={(event) => {
           props.onInput(event.currentTarget.value);
           setActive(0);

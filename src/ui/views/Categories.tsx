@@ -1,4 +1,12 @@
-import { createMemo, createSignal, createUniqueId, flush, For, Show } from "solid-js";
+import { ActionIcon } from "../components/ActionIcon";
+import {
+  createMemo,
+  createSignal,
+  createUniqueId,
+  flush,
+  For,
+  Show,
+} from "solid-js";
 import type { Category } from "../../contracts";
 import { normalizeLookupText } from "../../domain";
 import { FieldError } from "../components/FieldError";
@@ -11,19 +19,32 @@ export function Categories() {
       <div class="page-head">
         <h1 tabindex="-1">Categorías</h1>
       </div>
-      <p class="lede">Organiza tus recetas por tipo de platillo y por cocina. Puedes asignar varias a una misma receta.</p>
+      <p class="lede">
+        Organiza tus recetas por tipo de platillo y por cocina. Puedes asignar
+        varias a una misma receta.
+      </p>
       <CategorySection
         kind="dish_type"
         title="Tipos de platillo"
         singular="tipo de platillo"
         emptyText="Aún no tienes tipos de platillo."
       />
-      <CategorySection kind="cuisine" title="Cocinas" singular="cocina" emptyText="Aún no tienes cocinas." />
+      <CategorySection
+        kind="cuisine"
+        title="Cocinas"
+        singular="cocina"
+        emptyText="Aún no tienes cocinas."
+      />
     </>
   );
 }
 
-function CategorySection(props: { kind: Category["kind"]; title: string; singular: string; emptyText: string }) {
+function CategorySection(props: {
+  kind: Category["kind"];
+  title: string;
+  singular: string;
+  emptyText: string;
+}) {
   const app = useApp();
   const ids = createUniqueId();
   const [newName, setNewName] = createSignal("");
@@ -35,12 +56,16 @@ function CategorySection(props: { kind: Category["kind"]; title: string; singula
   const [savingEdit, setSavingEdit] = createSignal(false);
 
   const list = createMemo(() =>
-    app.library().categories.filter((category) => category.kind === props.kind).sort((a, b) => compareNames(a.name, b.name)),
+    app
+      .library()
+      .categories.filter((category) => category.kind === props.kind)
+      .sort((a, b) => compareNames(a.name, b.name)),
   );
   const usage = createMemo(() => {
     const counts = new Map<string, number>();
     for (const recipe of app.library().recipes) {
-      for (const id of new Set(recipe.categoryIds)) counts.set(id, (counts.get(id) ?? 0) + 1);
+      for (const id of new Set(recipe.categoryIds))
+        counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     return counts;
   });
@@ -50,8 +75,13 @@ function CategorySection(props: { kind: Category["kind"]; title: string; singula
     const trimmed = text.trim();
     if (!trimmed) return "Escribe un nombre.";
     const key = normalizeLookupText(trimmed);
-    const duplicate = list().some((category) => category.id !== ignoreId && normalizeLookupText(category.name) === key);
-    return duplicate ? "Ya existe una categoría con ese nombre en esta sección." : undefined;
+    const duplicate = list().some(
+      (category) =>
+        category.id !== ignoreId && normalizeLookupText(category.name) === key,
+    );
+    return duplicate
+      ? "Ya existe una categoría con ese nombre en esta sección."
+      : undefined;
   }
 
   async function add(event: SubmitEvent) {
@@ -65,14 +95,19 @@ function CategorySection(props: { kind: Category["kind"]; title: string; singula
       return;
     }
     setAdding(true);
-    const result = await app.saveCategory({ name: newName().trim().replace(/\s+/gu, " "), kind: props.kind });
+    const result = await app.saveCategory({
+      name: newName().trim().replace(/\s+/gu, " "),
+      kind: props.kind,
+    });
     setAdding(false);
     if (result.ok) {
       setNewName("");
       app.notify("success", `Se agregó «${result.value.name}».`);
       focusSelector(`#${ids}-new`);
     } else {
-      setNewError("No pudimos guardar la categoría. Tu texto sigue aquí. Inténtalo de nuevo.");
+      setNewError(
+        "No pudimos guardar la categoría. Tu texto sigue aquí. Inténtalo de nuevo.",
+      );
     }
   }
 
@@ -102,13 +137,19 @@ function CategorySection(props: { kind: Category["kind"]; title: string; singula
       return;
     }
     setSavingEdit(true);
-    const result = await app.saveCategory({ id: category.id, name: editName().trim().replace(/\s+/gu, " "), kind: category.kind });
+    const result = await app.saveCategory({
+      id: category.id,
+      name: editName().trim().replace(/\s+/gu, " "),
+      kind: category.kind,
+    });
     setSavingEdit(false);
     if (result.ok) {
       app.notify("success", "Categoría actualizada.");
       stopEdit(category.id);
     } else {
-      setEditError("No pudimos guardar la categoría. Tu texto sigue aquí. Inténtalo de nuevo.");
+      setEditError(
+        "No pudimos guardar la categoría. Tu texto sigue aquí. Inténtalo de nuevo.",
+      );
     }
   }
 
@@ -128,14 +169,20 @@ function CategorySection(props: { kind: Category["kind"]; title: string; singula
       app.notify("success", `Se eliminó «${category.name}».`);
       focusSelector(`#${ids}-new`);
     } else {
-      app.notify("error", "No se pudo eliminar la categoría. Inténtalo de nuevo.");
+      app.notify(
+        "error",
+        "No se pudo eliminar la categoría. Inténtalo de nuevo.",
+      );
     }
   }
 
   return (
     <section class="panel" aria-labelledby={`${ids}-title`}>
       <h2 id={`${ids}-title`}>{props.title}</h2>
-      <Show when={list().length > 0} fallback={<p class="empty-inline">{props.emptyText}</p>}>
+      <Show
+        when={list().length > 0}
+        fallback={<p class="empty-inline">{props.emptyText}</p>}
+      >
         <ul class="catalog-list">
           <For each={list()}>
             {(category) => (
@@ -147,7 +194,9 @@ function CategorySection(props: { kind: Category["kind"]; title: string; singula
                       <div class="catalog-main">
                         <h3 class="catalog-name">{category.name}</h3>
                         <p class="card-meta">
-                          {usage().get(category.id) ? `En ${recipeCount(usage().get(category.id) ?? 0)}` : "Sin usar"}
+                          {usage().get(category.id)
+                            ? `En ${recipeCount(usage().get(category.id) ?? 0)}`
+                            : "Sin usar"}
                         </p>
                       </div>
                       <div class="actions">
@@ -157,22 +206,30 @@ function CategorySection(props: { kind: Category["kind"]; title: string; singula
                           class="btn btn-small"
                           aria-label={`Renombrar ${category.name}`}
                           onClick={() => startEdit(category)}
+                          title={`Renombrar ${category.name}`}
                         >
-                          Renombrar
+                          <ActionIcon name="edit" />
+                          <span class="sr-only">Renombrar</span>
                         </button>
                         <button
                           type="button"
                           class="btn btn-small btn-danger-quiet"
                           aria-label={`Eliminar ${category.name}`}
                           onClick={() => void remove(category)}
+                          title={`Eliminar ${category.name}`}
                         >
-                          Eliminar
+                          <ActionIcon name="delete" />
+                          <span class="sr-only">Eliminar</span>
                         </button>
                       </div>
                     </>
                   }
                 >
-                  <form class="inline-form" novalidate onSubmit={(event) => void saveEdit(event, category)}>
+                  <form
+                    class="inline-form"
+                    novalidate
+                    onSubmit={(event) => void saveEdit(event, category)}
+                  >
                     <div class="field">
                       <label for={`${ids}-edit`}>Nombre de la categoría</label>
                       <input
@@ -181,7 +238,9 @@ function CategorySection(props: { kind: Category["kind"]; title: string; singula
                         type="text"
                         autocomplete="off"
                         aria-invalid={editError() ? "true" : undefined}
-                        aria-describedby={editError() ? `${ids}-edit-error` : undefined}
+                        aria-describedby={
+                          editError() ? `${ids}-edit-error` : undefined
+                        }
                         value={editName()}
                         onInput={(event) => {
                           setEditName(event.currentTarget.value);
@@ -191,14 +250,31 @@ function CategorySection(props: { kind: Category["kind"]; title: string; singula
                           if (event.key === "Escape") stopEdit(category.id);
                         }}
                       />
-                      <FieldError id={`${ids}-edit-error`} message={editError()} />
+                      <FieldError
+                        id={`${ids}-edit-error`}
+                        message={editError()}
+                      />
                     </div>
                     <div class="actions">
-                      <button type="submit" class="btn btn-small btn-primary" disabled={savingEdit()}>
-                        {savingEdit() ? "Guardando…" : "Guardar"}
+                      <button
+                        type="submit"
+                        class="btn btn-small btn-primary"
+                        disabled={savingEdit()}
+                        title={savingEdit() ? "Guardando…" : "Guardar"}
+                      >
+                        <ActionIcon name="save" />
+                        <span class="sr-only">
+                          {savingEdit() ? "Guardando…" : "Guardar"}
+                        </span>
                       </button>
-                      <button type="button" class="btn btn-small" onClick={() => stopEdit(category.id)}>
-                        Cancelar
+                      <button
+                        type="button"
+                        class="btn btn-small"
+                        onClick={() => stopEdit(category.id)}
+                        title="Cancelar"
+                      >
+                        <ActionIcon name="close" />
+                        <span class="sr-only">Cancelar</span>
                       </button>
                     </div>
                   </form>
@@ -209,7 +285,11 @@ function CategorySection(props: { kind: Category["kind"]; title: string; singula
         </ul>
       </Show>
 
-      <form class="inline-form add-form" novalidate onSubmit={(event) => void add(event)}>
+      <form
+        class="inline-form add-form"
+        novalidate
+        onSubmit={(event) => void add(event)}
+      >
         <div class="field">
           <label for={`${ids}-new`}>Agregar {props.singular}</label>
           <input
@@ -227,8 +307,14 @@ function CategorySection(props: { kind: Category["kind"]; title: string; singula
           />
           <FieldError id={`${ids}-new-error`} message={newError()} />
         </div>
-        <button type="submit" class="btn btn-primary" disabled={adding()}>
-          {adding() ? "Agregando…" : "Agregar"}
+        <button
+          type="submit"
+          class="btn btn-primary"
+          disabled={adding()}
+          title={adding() ? "Agregando…" : "Agregar"}
+        >
+          <ActionIcon name="add" />
+          <span class="sr-only">{adding() ? "Agregando…" : "Agregar"}</span>
         </button>
       </form>
     </section>

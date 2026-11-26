@@ -1,3 +1,8 @@
 node_modules/
 dist/
 *.tsbuildinfo
+.env
+.env.*
+!.env.example
+# Local OCR engine files, copied by `npm run ocr:assets` from node_modules.
+public/ocr/

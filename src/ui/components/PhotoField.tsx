@@ -1,4 +1,12 @@
-import { createSignal, createUniqueId, Match, onSettled, Show, Switch } from "solid-js";
+import { ActionIcon } from "./ActionIcon";
+import {
+  createSignal,
+  createUniqueId,
+  Match,
+  onSettled,
+  Show,
+  Switch,
+} from "solid-js";
 import type { PhotoInput } from "../../contracts";
 import { acceptedPhotoTypes, PhotoError, prepareLocalPhoto } from "../photo";
 import { PhotoImage } from "./PhotoImage";
@@ -27,9 +35,11 @@ export function PhotoField(props: Props) {
 
   onSettled(() => () => releasePreview(props.choice));
 
-  const previewUrl = () => (props.choice.kind === "replace" ? props.choice.previewUrl : undefined);
+  const previewUrl = () =>
+    props.choice.kind === "replace" ? props.choice.previewUrl : undefined;
   const hasPhoto = () =>
-    props.choice.kind === "replace" || (props.choice.kind === "keep" && props.existingPhotoId !== undefined);
+    props.choice.kind === "replace" ||
+    (props.choice.kind === "keep" && props.existingPhotoId !== undefined);
 
   async function choose(file: File | undefined) {
     if (!file) return;
@@ -38,11 +48,17 @@ export function PhotoField(props: Props) {
     try {
       const prepared = await prepareLocalPhoto(file);
       releasePreview(props.choice);
-      props.onChange({ kind: "replace", input: prepared, previewUrl: URL.createObjectURL(prepared.blob) });
+      props.onChange({
+        kind: "replace",
+        input: prepared,
+        previewUrl: URL.createObjectURL(prepared.blob),
+      });
     } catch (failure) {
       console.error("Could not prepare the chosen photo.", failure);
       setError(
-        failure instanceof PhotoError ? failure.userMessage : "No pudimos procesar la foto. Prueba con otra.",
+        failure instanceof PhotoError
+          ? failure.userMessage
+          : "No pudimos procesar la foto. Prueba con otra.",
       );
     } finally {
       setBusy(false);
@@ -52,7 +68,11 @@ export function PhotoField(props: Props) {
   function remove() {
     setError("");
     releasePreview(props.choice);
-    props.onChange(props.existingPhotoId !== undefined ? { kind: "remove" } : { kind: "keep" });
+    props.onChange(
+      props.existingPhotoId !== undefined
+        ? { kind: "remove" }
+        : { kind: "keep" },
+    );
   }
 
   return (
@@ -66,22 +86,45 @@ export function PhotoField(props: Props) {
             <Match when={previewUrl()}>
               {(url) => <img src={url()} alt="Vista previa de la foto nueva" />}
             </Match>
-            <Match when={props.choice.kind === "keep" && props.existingPhotoId !== undefined}>
+            <Match
+              when={
+                props.choice.kind === "keep" &&
+                props.existingPhotoId !== undefined
+              }
+            >
               <PhotoImage
                 photoId={props.existingPhotoId}
                 alt="Foto actual de la receta"
-                fallback={<span class="photo-empty">No se pudo cargar la foto</span>}
+                fallback={
+                  <span class="photo-empty">No se pudo cargar la foto</span>
+                }
               />
             </Match>
           </Switch>
         </div>
         <div class="photo-actions">
-          <button type="button" class="btn" disabled={busy()} onClick={() => input?.click()}>
-            {hasPhoto() ? "Reemplazar foto" : "Elegir foto"}
+          <button
+            type="button"
+            class="btn"
+            disabled={busy()}
+            onClick={() => input?.click()}
+            title={hasPhoto() ? "Reemplazar foto" : "Elegir foto"}
+          >
+            <ActionIcon name="image" />
+            <span class="sr-only">
+              {hasPhoto() ? "Reemplazar foto" : "Elegir foto"}
+            </span>
           </button>
           <Show when={hasPhoto()}>
-            <button type="button" class="btn btn-quiet" disabled={busy()} onClick={remove}>
-              Quitar foto
+            <button
+              type="button"
+              class="btn btn-quiet"
+              disabled={busy()}
+              onClick={remove}
+              title="Quitar foto"
+            >
+              <ActionIcon name="delete" />
+              <span class="sr-only">Quitar foto</span>
             </button>
           </Show>
           <input
@@ -96,7 +139,9 @@ export function PhotoField(props: Props) {
               void choose(file);
             }}
           />
-          <p class="hint">La foto se reduce y se guarda solo en este dispositivo.</p>
+          <p class="hint">
+            La foto se reduce y se guarda solo en este dispositivo.
+          </p>
         </div>
       </div>
       <div role="status">

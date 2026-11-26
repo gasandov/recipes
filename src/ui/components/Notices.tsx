@@ -1,3 +1,4 @@
+import { ActionIcon } from "./ActionIcon";
 import { For } from "solid-js";
 import { useApp } from "../use-app";
 
@@ -16,8 +17,14 @@ export function Notices() {
           {(notice) => (
             <p class="notice notice-error">
               <span>{notice.text}</span>
-              <button type="button" class="link-button" onClick={() => app.dismissNotice(notice.id)}>
-                Cerrar
+              <button
+                type="button"
+                class="link-button"
+                onClick={() => app.dismissNotice(notice.id)}
+                title="Cerrar"
+              >
+                <ActionIcon name="close" />
+                <span class="sr-only">Cerrar</span>
               </button>
             </p>
           )}

@@ -14,6 +14,21 @@ async function hasHorizontalOverflow(app: App): Promise<boolean> {
   return app.page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
 }
 
+test("icon-only actions keep accessible names and bundled artwork", async ({ app, page }) => {
+  await page.addInitScript(() => Object.defineProperty(window, "SpeechRecognition", { value: undefined }));
+  await app.createRecipe({ name: "Receta con íconos" });
+  for (const route of [...routes, "#/respaldos", "#/cuenta", "#/recetas/capturar"]) {
+    await app.open(route);
+    const actions = page.locator("button, a.btn, .app-nav a, summary");
+    for (const action of await actions.all()) {
+      if (!await action.isVisible()) continue;
+      await expect(action).toHaveAccessibleName(/\S/);
+      await expect(action.locator(":scope > svg.action-icon")).toHaveCount(1);
+      await expect(action.locator(":scope > :not(svg):not(.sr-only)")).toHaveCount(0);
+    }
+  }
+});
+
 test.describe("keyboard and focus", () => {
   test("the skip link and route changes move focus to the page heading", async ({ app, page, browserName }) => {
     test.skip(browserName === "webkit", "Safari does not Tab to links by default, so Tab-driven focus is checked on Chromium.");
@@ -116,6 +131,7 @@ test.describe("narrow screens", () => {
   test.use({ viewport: { width: 320, height: 640 } });
 
   test("no view needs horizontal scrolling at 320 px", async ({ app }) => {
+    await app.page.addInitScript(() => Object.defineProperty(window, "SpeechRecognition", { value: undefined }));
     await app.createRecipe({
       name: "Receta con un nombre muy largo para comprobar que el diseño se ajusta bien en pantallas angostas",
       sourceUrl: "https://recetas.example/una/direccion/muy/larga/que/no/debe/romper/el/diseno/de/la/pantalla",
@@ -126,7 +142,7 @@ test.describe("narrow screens", () => {
     expect(await hasHorizontalOverflow(app)).toBe(false);
     await app.addToMenu("Receta con un nombre muy largo para comprobar que el diseño se ajusta bien en pantallas angostas");
 
-    for (const route of routes) {
+    for (const route of [...routes, "#/recetas/capturar", "#/respaldos", "#/cuenta"]) {
       await app.open(route);
       expect(await hasHorizontalOverflow(app), `horizontal overflow on ${route}`).toBe(false);
     }

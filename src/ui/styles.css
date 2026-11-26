@@ -1177,3 +1177,72 @@ button.chip {
     animation: none !important;
   }
 }
+
+/* Icon-only actions retain their Spanish labels for assistive technology. */
+.action-icon {
+  display: block;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+button,
+a.btn,
+.app-nav a {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.btn,
+.app-nav a {
+  padding: 0.65rem;
+}
+
+summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+details[open] > summary > .action-icon {
+  transform: rotate(180deg);
+}
+
+.file-picker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1.5px solid var(--green);
+  border-radius: var(--radius);
+  color: var(--green-deep);
+}
+
+.file-picker > input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-picker:focus-within {
+  outline: 3px solid var(--green);
+  outline-offset: 3px;
+}
+
+.file-picker:has(input:disabled) {
+  opacity: 0.55;
+}

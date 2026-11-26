@@ -1,15 +1,50 @@
-import { createMemo, createSignal, createStore, createUniqueId, flush, For, Match, onSettled, Show, Switch } from "solid-js";
+import { ActionIcon } from "../components/ActionIcon";
+import {
+  createMemo,
+  createSignal,
+  createStore,
+  createUniqueId,
+  flush,
+  For,
+  Match,
+  onSettled,
+  Show,
+  Switch,
+} from "solid-js";
+import type {
+  CapturedIngredient,
+  CapturedRecipe,
+} from "../../capture/contract";
 import { RECIPE_PORTIONS } from "../../contracts";
 import type {
-  Amount, Ingredient, Recipe, RecipeDraft, RecipeIngredient, TagId, UnitId,
+  Amount,
+  Ingredient,
+  Recipe,
+  RecipeDraft,
+  RecipeIngredient,
+  TagId,
+  UnitId,
 } from "../../contracts";
-import { formatMeasuredAmount, normalizeLookupText, normalizeSourceUrl, parseMeasuredAmount, suggestTags } from "../../domain";
+import {
+  formatMeasuredAmount,
+  normalizeLookupText,
+  normalizeSourceUrl,
+  parseMeasuredAmount,
+  suggestTags,
+} from "../../domain";
 import { FieldError } from "../components/FieldError";
 import { IngredientCombobox } from "../components/IngredientCombobox";
 import { PhotoField } from "../components/PhotoField";
 import type { PhotoChoice } from "../components/PhotoField";
 import { navigate, paths } from "../router";
-import { categoryKindLabels, compareNames, orderedTags, orderedUnits, tagLabels, unitOptionLabel } from "../text";
+import {
+  categoryKindLabels,
+  compareNames,
+  orderedTags,
+  orderedUnits,
+  tagLabels,
+  unitOptionLabel,
+} from "../text";
 import { focusSelector, useApp } from "../use-app";
 
 type LineKind = "measured" | "qualitative" | "unspecified";
@@ -35,7 +70,7 @@ type FormState = {
   lines: LineDraft[];
 };
 
-type Props = { recipe: Recipe | undefined };
+type Props = { recipe: Recipe | undefined; captured?: CapturedRecipe };
 
 const defaultNote = "al gusto";
 const quantityHint = "Ejemplos: 2, 1/2, 1 1/2, 0.5 o un rango como 2-3.";
@@ -46,10 +81,21 @@ let counter = 0;
 const nextKey = () => ++counter;
 
 function emptyLine(): LineDraft {
-  return { key: nextKey(), ingredientId: "", query: "", kind: "measured", quantity: "", unit: "gram", note: defaultNote };
+  return {
+    key: nextKey(),
+    ingredientId: "",
+    query: "",
+    kind: "measured",
+    quantity: "",
+    unit: "gram",
+    note: defaultNote,
+  };
 }
 
-function lineFromRecipe(line: RecipeIngredient, ingredients: Map<string, Ingredient>): LineDraft {
+function lineFromRecipe(
+  line: RecipeIngredient,
+  ingredients: Map<string, Ingredient>,
+): LineDraft {
   const draft: LineDraft = { ...emptyLine(), ingredientId: line.ingredientId };
   const ingredient = ingredients.get(line.ingredientId);
   if (ingredient) draft.query = ingredient.name;
@@ -71,29 +117,103 @@ function lineFromRecipe(line: RecipeIngredient, ingredients: Map<string, Ingredi
   return draft;
 }
 
+function pluralOf(word: string): string {
+  if (word.endsWith("z")) return `${word.slice(0, -1)}ces`;
+  return /[aeiou]$/.test(word) ? `${word}s` : `${word}es`;
+}
+
+function matchCapturedIngredient(
+  name: string,
+  ingredients: Ingredient[],
+): Ingredient | undefined {
+  const normalized = normalizeLookupText(name);
+  const labels = ingredients.map((ingredient) => ({
+    ingredient,
+    key: normalizeLookupText(ingredient.name),
+  }));
+  const exact = labels.filter(({ key }) => key === normalized);
+  if (exact.length) return exact.length === 1 ? exact[0].ingredient : undefined;
+  const words = normalized.split(" ");
+  const variants = labels.filter(({ key }) => {
+    const candidate = key.split(" ");
+    return (
+      candidate.length === words.length &&
+      candidate.every(
+        (word, index) =>
+          word === words[index] ||
+          pluralOf(word) === words[index] ||
+          word === pluralOf(words[index]),
+      )
+    );
+  });
+  return variants.length === 1 ? variants[0].ingredient : undefined;
+}
+
+function lineFromCapture(
+  line: CapturedIngredient,
+  ingredients: Ingredient[],
+): LineDraft {
+  const matched = matchCapturedIngredient(line.name, ingredients);
+  const draft: LineDraft = {
+    ...emptyLine(),
+    ingredientId: matched?.id ?? "",
+    query: matched?.name ?? line.name,
+    kind: line.amount.kind,
+  };
+  if (line.amount.kind === "measured") {
+    draft.quantity = formatMeasuredAmount(line.amount);
+    draft.unit = line.amount.unit;
+  }
+  if (line.amount.kind === "qualitative") draft.note = line.amount.text;
+  return draft;
+}
+
 export function RecipeForm(props: Props) {
   const app = useApp();
   // The form edits its own copy. Library refreshes (for example after creating an ingredient) must not reset it.
   const seed = app.snapshot();
   const original = props.recipe;
-  const catalog = new Map(seed.ingredients.map((ingredient) => [ingredient.id, ingredient]));
+  const captured = props.captured;
+  const needsPortionConfirmation =
+    captured !== undefined && captured.portions === undefined;
+  const catalog = new Map(
+    seed.ingredients.map((ingredient) => [ingredient.id, ingredient]),
+  );
+  const initialSteps = original?.steps ?? captured?.steps ?? [];
 
   const [form, setForm] = createStore<FormState>({
-    name: original?.name ?? "",
-    portions: String(RECIPE_PORTIONS),
-    sourceUrl: original?.sourceUrl ?? "",
+    name: original?.name ?? captured?.name ?? "",
+    portions: String(captured?.portions ?? RECIPE_PORTIONS),
+    sourceUrl: original?.sourceUrl ?? captured?.sourceUrl ?? "",
     categoryIds: original ? [...original.categoryIds] : [],
     tags: original ? [...original.tags] : [],
-    lines: (original?.ingredients ?? []).map((line) => lineFromRecipe(line, catalog)),
+    lines: original
+      ? original.ingredients.map((line) => lineFromRecipe(line, catalog))
+      : (captured?.ingredients ?? []).map((line) =>
+          lineFromCapture(line, seed.ingredients),
+        ),
   });
+  const [portionsConfirmed, setPortionsConfirmed] = createSignal(
+    !needsPortionConfirmation,
+  );
   const [steps, setSteps] = createSignal<StepRow[]>(
-    (original?.steps.length ? original.steps : [""]).map((text) => ({ key: nextKey(), text })),
+    (initialSteps.length > 0 ? initialSteps : [""]).map((text) => ({
+      key: nextKey(),
+      text,
+    })),
   );
   const [photo, setPhoto] = createSignal<PhotoChoice>({ kind: "keep" });
   const [errors, setErrors] = createSignal<Record<string, string>>({});
-  const [summary, setSummary] = createSignal<{ title: string; items: { id: string; message: string }[]; detail?: string } | undefined>(undefined);
+  const [summary, setSummary] = createSignal<
+    | {
+        title: string;
+        items: { id: string; message: string }[];
+        detail?: string;
+      }
+    | undefined
+  >(undefined);
   const [saving, setSaving] = createSignal(false);
-  const [dirty, setDirty] = createSignal(false);
+  const [dirty, setDirty] = createSignal(captured !== undefined);
   const [announcement, setAnnouncement] = createSignal("");
   const ids = createUniqueId();
   const isEditing = original !== undefined;
@@ -117,10 +237,16 @@ export function RecipeForm(props: Props) {
     });
 
   const dishTypes = createMemo(() =>
-    app.library().categories.filter((category) => category.kind === "dish_type").sort((a, b) => compareNames(a.name, b.name)),
+    app
+      .library()
+      .categories.filter((category) => category.kind === "dish_type")
+      .sort((a, b) => compareNames(a.name, b.name)),
   );
   const cuisines = createMemo(() =>
-    app.library().categories.filter((category) => category.kind === "cuisine").sort((a, b) => compareNames(a.name, b.name)),
+    app
+      .library()
+      .categories.filter((category) => category.kind === "cuisine")
+      .sort((a, b) => compareNames(a.name, b.name)),
   );
 
   // --- Ingredient lines ---------------------------------------------------------------------------
@@ -149,7 +275,11 @@ export function RecipeForm(props: Props) {
     });
     markDirty();
     setErrors((current) =>
-      Object.fromEntries(Object.entries(current).filter(([id]) => !id.startsWith(`line-${key}-`))),
+      Object.fromEntries(
+        Object.entries(current).filter(
+          ([id]) => !id.startsWith(`line-${key}-`),
+        ),
+      ),
     );
     setAnnouncement(`Ingrediente ${index + 1} quitado.`);
     flush();
@@ -162,14 +292,20 @@ export function RecipeForm(props: Props) {
   async function createIngredient(key: number, name: string) {
     const result = await app.saveIngredient({ name });
     if (result.ok) {
-      patchLine(key, { ingredientId: result.value.id, query: result.value.name });
+      patchLine(key, {
+        ingredientId: result.value.id,
+        query: result.value.name,
+      });
       clearError(`line-${key}-ingredient`);
       markDirty();
-      setAnnouncement(`Ingrediente «${result.value.name}» creado en el catálogo.`);
+      setAnnouncement(
+        `Ingrediente «${result.value.name}» creado en el catálogo.`,
+      );
     } else {
       setErrors((current) => ({
         ...current,
-        [`line-${key}-ingredient`]: "No se pudo crear el ingrediente. Inténtalo de nuevo.",
+        [`line-${key}-ingredient`]:
+          "No se pudo crear el ingrediente. Inténtalo de nuevo.",
       }));
     }
   }
@@ -217,30 +353,44 @@ export function RecipeForm(props: Props) {
 
   // --- Tags ------------------------------------------------------------------------------------------
 
-  const unresolvedLines = () => form.lines.some((line) => !line.ingredientId && line.query.trim() !== "");
+  const unresolvedLines = () =>
+    form.lines.some((line) => !line.ingredientId && line.query.trim() !== "");
   const resolvedLines = createMemo<RecipeIngredient[]>(() =>
     form.lines
       .filter((line) => line.ingredientId)
-      .map((line) => ({ ingredientId: line.ingredientId, amount: { kind: "unspecified" } })),
+      .map((line) => ({
+        ingredientId: line.ingredientId,
+        amount: { kind: "unspecified" },
+      })),
   );
   const unclassified = createMemo(() => {
     const names: string[] = [];
     for (const line of resolvedLines()) {
       const ingredient = app.ingredientsById().get(line.ingredientId);
-      if (ingredient && !ingredient.classification && !names.includes(ingredient.name)) names.push(ingredient.name);
+      if (
+        ingredient &&
+        !ingredient.classification &&
+        !names.includes(ingredient.name)
+      )
+        names.push(ingredient.name);
     }
     return names;
   });
   // Dietary suggestions need every row resolved, otherwise "vegan" could be suggested for a partial list.
   const suggestions = createMemo<TagId[]>(() =>
-    unresolvedLines() ? [] : suggestTags(resolvedLines(), app.library().ingredients).filter((tag) => !form.tags.includes(tag)),
+    unresolvedLines()
+      ? []
+      : suggestTags(resolvedLines(), app.library().ingredients).filter(
+          (tag) => !form.tags.includes(tag),
+        ),
   );
 
   function setTag(tag: TagId, selected: boolean) {
     setForm((draft) => {
       const present = draft.tags.includes(tag);
       if (selected && !present) draft.tags.push(tag);
-      if (!selected && present) draft.tags = draft.tags.filter((item) => item !== tag);
+      if (!selected && present)
+        draft.tags = draft.tags.filter((item) => item !== tag);
     });
     markDirty();
   }
@@ -249,7 +399,8 @@ export function RecipeForm(props: Props) {
     setForm((draft) => {
       const present = draft.categoryIds.includes(id);
       if (selected && !present) draft.categoryIds.push(id);
-      if (!selected && present) draft.categoryIds = draft.categoryIds.filter((item) => item !== id);
+      if (!selected && present)
+        draft.categoryIds = draft.categoryIds.filter((item) => item !== id);
     });
     markDirty();
   }
@@ -264,30 +415,53 @@ export function RecipeForm(props: Props) {
     if (!name) fail("recipe-name", "Escribe el nombre de la receta.");
 
     const portionsText = form.portions.trim();
-    const portions = /^\d+$/.test(portionsText) ? Number(portionsText) : Number.NaN;
+    const portions = /^\d+$/.test(portionsText)
+      ? Number(portionsText)
+      : Number.NaN;
     if (!Number.isSafeInteger(portions) || portions <= 0) {
-      fail("recipe-portions", "Escribe un número entero de porciones mayor que cero, por ejemplo 4.");
+      fail(
+        "recipe-portions",
+        "Escribe un número entero de porciones mayor que cero, por ejemplo 4.",
+      );
     }
+    if (!portionsConfirmed())
+      fail(
+        "recipe-confirm-portions",
+        "Confirma cuántas porciones rinde la receta.",
+      );
 
     let sourceUrl: string | undefined;
     try {
       sourceUrl = normalizeSourceUrl(form.sourceUrl);
     } catch {
-      fail("recipe-source", "Escribe un enlace válido que empiece con http:// o https://.");
+      fail(
+        "recipe-source",
+        "Escribe un enlace válido que empiece con http:// o https://.",
+      );
     }
 
     const lines: RecipeIngredient[] = [];
     for (const line of form.lines) {
       const prefix = `line-${line.key}`;
       const blank =
-        !line.query.trim()
-        && (line.kind === "unspecified" || (line.kind === "measured" ? !line.quantity.trim() : !line.note.trim()));
+        !line.query.trim() &&
+        (line.kind === "unspecified" ||
+          (line.kind === "measured"
+            ? !line.quantity.trim()
+            : !line.note.trim()));
       if (blank) continue;
 
       let ingredientId = line.ingredientId;
       if (!ingredientId) {
         const query = normalizeLookupText(line.query);
-        const match = query ? app.library().ingredients.find((item) => normalizeLookupText(item.name) === query) : undefined;
+        const matches = query
+          ? app
+              .library()
+              .ingredients.filter(
+                (item) => normalizeLookupText(item.name) === query,
+              )
+          : [];
+        const match = matches.length === 1 ? matches[0] : undefined;
         if (match) {
           ingredientId = match.id;
           patchLine(line.key, { ingredientId: match.id, query: match.name });
@@ -305,7 +479,10 @@ export function RecipeForm(props: Props) {
       let amount: Amount | undefined;
       if (line.kind === "measured") {
         if (!line.quantity.trim()) {
-          fail(`${prefix}-quantity`, "Escribe la cantidad o cambia el tipo a «Sin cantidad».");
+          fail(
+            `${prefix}-quantity`,
+            "Escribe la cantidad o cambia el tipo a «Sin cantidad».",
+          );
           continue;
         }
         try {
@@ -320,7 +497,10 @@ export function RecipeForm(props: Props) {
         }
       } else if (line.kind === "qualitative") {
         if (!line.note.trim()) {
-          fail(`${prefix}-note`, "Escribe una nota, por ejemplo «al gusto», o cambia el tipo de cantidad.");
+          fail(
+            `${prefix}-note`,
+            "Escribe una nota, por ejemplo «al gusto», o cambia el tipo de cantidad.",
+          );
           continue;
         }
         amount = { kind: "qualitative", text: line.note.trim() };
@@ -332,18 +512,25 @@ export function RecipeForm(props: Props) {
 
     setErrors(Object.fromEntries(found.map((item) => [item.id, item.message])));
     if (found.length > 0) {
-      setSummary({ title: "Revisa estos campos antes de guardar", items: found });
+      setSummary({
+        title: "Revisa estos campos antes de guardar",
+        items: found,
+      });
       return undefined;
     }
 
-    const knownCategories = new Set(app.library().categories.map((category) => category.id));
+    const knownCategories = new Set(
+      app.library().categories.map((category) => category.id),
+    );
     return {
       draft: {
         ...(original ? { id: original.id } : {}),
         name,
         ...(sourceUrl === undefined ? {} : { sourceUrl }),
         ingredients: lines,
-        steps: steps().map((row) => row.text.trim()).filter(Boolean),
+        steps: steps()
+          .map((row) => row.text.trim())
+          .filter(Boolean),
         categoryIds: form.categoryIds.filter((id) => knownCategories.has(id)),
         tags: [...form.tags],
         enteredPortions: portions,
@@ -365,7 +552,12 @@ export function RecipeForm(props: Props) {
     }
 
     const choice = photo();
-    const photoArgument = choice.kind === "replace" ? choice.input : choice.kind === "remove" ? null : undefined;
+    const photoArgument =
+      choice.kind === "replace"
+        ? choice.input
+        : choice.kind === "remove"
+          ? null
+          : undefined;
 
     setSaving(true);
     const outcome = await app.saveRecipe(result.draft, photoArgument);
@@ -373,12 +565,19 @@ export function RecipeForm(props: Props) {
 
     if (outcome.ok) {
       setDirty(false);
-      app.notify("success", isEditing ? "Cambios guardados." : "Receta guardada.");
+      app.notify(
+        "success",
+        isEditing ? "Cambios guardados." : "Receta guardada.",
+      );
       navigate(paths.recipe(outcome.value.id));
       return;
     }
 
-    setSummary({ title: "No se pudo guardar la receta", items: [], detail: submitFailure });
+    setSummary({
+      title: "No se pudo guardar la receta",
+      items: [],
+      detail: submitFailure,
+    });
     flush();
     focusSelector("#form-summary");
   }
@@ -400,12 +599,42 @@ export function RecipeForm(props: Props) {
   // --- View ------------------------------------------------------------------------------------------
 
   return (
-    <form class="recipe-form" novalidate onSubmit={(event) => void submit(event)} onInput={markDirty} aria-busy={saving() ? "true" : undefined}>
-      <h1 tabindex="-1">{isEditing ? "Editar receta" : "Nueva receta"}</h1>
+    <form
+      class="recipe-form"
+      novalidate
+      onSubmit={(event) => void submit(event)}
+      onInput={markDirty}
+      aria-busy={saving() ? "true" : undefined}
+    >
+      <h1 tabindex="-1">
+        {isEditing
+          ? "Editar receta"
+          : captured
+            ? "Revisar receta"
+            : "Nueva receta"}
+      </h1>
+
+      <Show when={captured}>
+        <p class="hint">
+          Revisa las cantidades, los ingredientes y los pasos antes de guardar.
+        </p>
+        <Show when={(captured?.notices?.length ?? 0) > 0}>
+          <ul class="hint">
+            <For each={captured?.notices ?? []}>
+              {(notice) => <li>{notice}</li>}
+            </For>
+          </ul>
+        </Show>
+      </Show>
 
       <Show when={summary()} keyed>
         {(current) => (
-          <section class="error-summary" id="form-summary" tabindex="-1" aria-labelledby="form-summary-title">
+          <section
+            class="error-summary"
+            id="form-summary"
+            tabindex="-1"
+            aria-labelledby="form-summary-title"
+          >
             <h2 id="form-summary-title">{current.title}</h2>
             <Show when={current.detail}>
               <p>{current.detail}</p>
@@ -446,7 +675,9 @@ export function RecipeForm(props: Props) {
             autocomplete="off"
             aria-required="true"
             aria-invalid={errors()["recipe-name"] ? "true" : undefined}
-            aria-describedby={errors()["recipe-name"] ? "recipe-name-error" : undefined}
+            aria-describedby={
+              errors()["recipe-name"] ? "recipe-name-error" : undefined
+            }
             value={form.name}
             onInput={(event) => {
               const value = event.currentTarget.value;
@@ -456,7 +687,10 @@ export function RecipeForm(props: Props) {
               clearError("recipe-name");
             }}
           />
-          <FieldError id="recipe-name-error" message={errors()["recipe-name"]} />
+          <FieldError
+            id="recipe-name-error"
+            message={errors()["recipe-name"]}
+          />
         </div>
 
         <div class="field field-narrow">
@@ -467,7 +701,11 @@ export function RecipeForm(props: Props) {
             type="text"
             inputmode="numeric"
             autocomplete="off"
-            aria-describedby={errors()["recipe-portions"] ? "recipe-portions-error recipe-portions-hint" : "recipe-portions-hint"}
+            aria-describedby={
+              errors()["recipe-portions"]
+                ? "recipe-portions-error recipe-portions-hint"
+                : "recipe-portions-hint"
+            }
             aria-invalid={errors()["recipe-portions"] ? "true" : undefined}
             value={form.portions}
             onInput={(event) => {
@@ -475,13 +713,41 @@ export function RecipeForm(props: Props) {
               setForm((draft) => {
                 draft.portions = value;
               });
+              if (needsPortionConfirmation) setPortionsConfirmed(false);
               clearError("recipe-portions");
             }}
           />
-          <FieldError id="recipe-portions-error" message={errors()["recipe-portions"]} />
+          <FieldError
+            id="recipe-portions-error"
+            message={errors()["recipe-portions"]}
+          />
           <p class="hint" id="recipe-portions-hint">
-            Escribe las cantidades para esta cantidad de porciones. La receta se guarda y se abre para {RECIPE_PORTIONS} porciones.
+            Escribe las cantidades para esta cantidad de porciones. La receta se
+            guarda y se abre para {RECIPE_PORTIONS} porciones.
           </p>
+          <Show when={needsPortionConfirmation}>
+            <label class="check">
+              <input
+                id="recipe-confirm-portions"
+                type="checkbox"
+                checked={portionsConfirmed()}
+                aria-describedby={
+                  errors()["recipe-confirm-portions"]
+                    ? "recipe-confirm-portions-error"
+                    : undefined
+                }
+                onChange={(event) => {
+                  setPortionsConfirmed(event.currentTarget.checked);
+                  clearError("recipe-confirm-portions");
+                }}
+              />
+              Confirmo las porciones indicadas
+            </label>
+            <FieldError
+              id="recipe-confirm-portions-error"
+              message={errors()["recipe-confirm-portions"]}
+            />
+          </Show>
         </div>
 
         <div class="field">
@@ -498,7 +764,9 @@ export function RecipeForm(props: Props) {
             spellcheck={false}
             placeholder="https://"
             aria-invalid={errors()["recipe-source"] ? "true" : undefined}
-            aria-describedby={errors()["recipe-source"] ? "recipe-source-error" : undefined}
+            aria-describedby={
+              errors()["recipe-source"] ? "recipe-source-error" : undefined
+            }
             value={form.sourceUrl}
             onInput={(event) => {
               const value = event.currentTarget.value;
@@ -508,7 +776,10 @@ export function RecipeForm(props: Props) {
               clearError("recipe-source");
             }}
           />
-          <FieldError id="recipe-source-error" message={errors()["recipe-source"]} />
+          <FieldError
+            id="recipe-source-error"
+            message={errors()["recipe-source"]}
+          />
         </div>
 
         <PhotoField
@@ -524,7 +795,8 @@ export function RecipeForm(props: Props) {
       <section class="panel" aria-labelledby={`${ids}-ingredients`}>
         <h2 id={`${ids}-ingredients`}>Ingredientes</h2>
         <p class="hint">
-          Escribe para buscar en tu catálogo. Si no existe, créalo ahí mismo. Puedes dejar la cantidad vacía con «Sin cantidad».
+          Escribe para buscar en tu catálogo. Si no existe, créalo ahí mismo.
+          Puedes dejar la cantidad vacía con «Sin cantidad».
         </p>
         <Show when={form.lines.length === 0}>
           <p class="empty-inline">Todavía no agregas ingredientes.</p>
@@ -542,8 +814,10 @@ export function RecipeForm(props: Props) {
                       class="btn btn-quiet btn-small"
                       aria-label={`Quitar el ingrediente ${index() + 1}`}
                       onClick={() => removeLine(line.key)}
+                      title={`Quitar el ingrediente ${index() + 1}`}
                     >
-                      Quitar
+                      <ActionIcon name="delete" />
+                      <span class="sr-only">Quitar</span>
                     </button>
                   </div>
                   <div class="field">
@@ -555,19 +829,29 @@ export function RecipeForm(props: Props) {
                       ingredients={app.library().ingredients}
                       canCreate
                       invalid={Boolean(errors()[`${prefix()}-ingredient`])}
-                      describedBy={errors()[`${prefix()}-ingredient`] ? `${prefix()}-ingredient-error` : undefined}
+                      describedBy={
+                        errors()[`${prefix()}-ingredient`]
+                          ? `${prefix()}-ingredient-error`
+                          : undefined
+                      }
                       onInput={(text) => {
                         patchLine(line.key, { query: text, ingredientId: "" });
                         clearError(`${prefix()}-ingredient`);
                       }}
                       onPick={(ingredient) => {
-                        patchLine(line.key, { ingredientId: ingredient.id, query: ingredient.name });
+                        patchLine(line.key, {
+                          ingredientId: ingredient.id,
+                          query: ingredient.name,
+                        });
                         clearError(`${prefix()}-ingredient`);
                         markDirty();
                       }}
                       onCreate={(name) => createIngredient(line.key, name)}
                     />
-                    <FieldError id={`${prefix()}-ingredient-error`} message={errors()[`${prefix()}-ingredient`]} />
+                    <FieldError
+                      id={`${prefix()}-ingredient-error`}
+                      message={errors()[`${prefix()}-ingredient`]}
+                    />
                   </div>
 
                   <div class="line-amount">
@@ -578,7 +862,9 @@ export function RecipeForm(props: Props) {
                         class="control"
                         value={line.kind}
                         onChange={(event) => {
-                          patchLine(line.key, { kind: event.currentTarget.value as LineKind });
+                          patchLine(line.key, {
+                            kind: event.currentTarget.value as LineKind,
+                          });
                           clearError(`${prefix()}-quantity`);
                           clearError(`${prefix()}-note`);
                           markDirty();
@@ -601,9 +887,15 @@ export function RecipeForm(props: Props) {
                             inputmode="text"
                             autocomplete="off"
                             placeholder="1 1/2"
-                            aria-invalid={errors()[`${prefix()}-quantity`] ? "true" : undefined}
+                            aria-invalid={
+                              errors()[`${prefix()}-quantity`]
+                                ? "true"
+                                : undefined
+                            }
                             aria-describedby={
-                              errors()[`${prefix()}-quantity`] ? `${prefix()}-quantity-error` : `${prefix()}-quantity-hint`
+                              errors()[`${prefix()}-quantity`]
+                                ? `${prefix()}-quantity-error`
+                                : `${prefix()}-quantity-hint`
                             }
                             value={line.quantity}
                             onInput={(event) => {
@@ -620,20 +912,36 @@ export function RecipeForm(props: Props) {
                             class="control"
                             value={line.unit}
                             onChange={(event) => {
-                              patchLine(line.key, { unit: event.currentTarget.value as UnitId });
+                              patchLine(line.key, {
+                                unit: event.currentTarget.value as UnitId,
+                              });
                               markDirty();
                             }}
                           >
                             <For each={orderedUnits}>
-                              {(unit) => <option value={unit}>{unitOptionLabel(unit)}</option>}
+                              {(unit) => (
+                                <option value={unit}>
+                                  {unitOptionLabel(unit)}
+                                </option>
+                              )}
                             </For>
                           </select>
                         </div>
                         <Show
                           when={errors()[`${prefix()}-quantity`]}
-                          fallback={<p class="hint line-wide" id={`${prefix()}-quantity-hint`}>{quantityHint}</p>}
+                          fallback={
+                            <p
+                              class="hint line-wide"
+                              id={`${prefix()}-quantity-hint`}
+                            >
+                              {quantityHint}
+                            </p>
+                          }
                         >
-                          <FieldError id={`${prefix()}-quantity-error`} message={errors()[`${prefix()}-quantity`]} />
+                          <FieldError
+                            id={`${prefix()}-quantity-error`}
+                            message={errors()[`${prefix()}-quantity`]}
+                          />
                         </Show>
                       </Match>
                       <Match when={line.kind === "qualitative"}>
@@ -645,8 +953,14 @@ export function RecipeForm(props: Props) {
                             type="text"
                             autocomplete="off"
                             list={`${ids}-notes`}
-                            aria-invalid={errors()[`${prefix()}-note`] ? "true" : undefined}
-                            aria-describedby={errors()[`${prefix()}-note`] ? `${prefix()}-note-error` : undefined}
+                            aria-invalid={
+                              errors()[`${prefix()}-note`] ? "true" : undefined
+                            }
+                            aria-describedby={
+                              errors()[`${prefix()}-note`]
+                                ? `${prefix()}-note-error`
+                                : undefined
+                            }
                             value={line.note}
                             onInput={(event) => {
                               const value = event.currentTarget.value;
@@ -654,11 +968,16 @@ export function RecipeForm(props: Props) {
                               clearError(`${prefix()}-note`);
                             }}
                           />
-                          <FieldError id={`${prefix()}-note-error`} message={errors()[`${prefix()}-note`]} />
+                          <FieldError
+                            id={`${prefix()}-note-error`}
+                            message={errors()[`${prefix()}-note`]}
+                          />
                         </div>
                       </Match>
                       <Match when={line.kind === "unspecified"}>
-                        <p class="hint line-wide">Se mostrará solo el nombre del ingrediente.</p>
+                        <p class="hint line-wide">
+                          Se mostrará solo el nombre del ingrediente.
+                        </p>
                       </Match>
                     </Switch>
                   </div>
@@ -673,8 +992,15 @@ export function RecipeForm(props: Props) {
           <option value="para decorar" />
           <option value="para freír" />
         </datalist>
-        <button type="button" class="btn" id="add-line" onClick={addLine}>
-          + Agregar ingrediente
+        <button
+          type="button"
+          class="btn"
+          id="add-line"
+          onClick={addLine}
+          title="+ Agregar ingrediente"
+        >
+          <ActionIcon name="add" />
+          <span class="sr-only">+ Agregar ingrediente</span>
         </button>
       </section>
 
@@ -694,8 +1020,12 @@ export function RecipeForm(props: Props) {
                       aria-label={`Subir el paso ${index() + 1}`}
                       disabled={index() === 0}
                       onClick={() => moveStep(row.key, -1)}
+                      title={`Subir el paso ${index() + 1}`}
                     >
-                      <span aria-hidden="true">↑</span>
+                      <ActionIcon name="up" />
+                      <span class="sr-only">
+                        <span aria-hidden="true">↑</span>
+                      </span>
                     </button>
                     <button
                       type="button"
@@ -704,16 +1034,22 @@ export function RecipeForm(props: Props) {
                       aria-label={`Bajar el paso ${index() + 1}`}
                       disabled={index() === steps().length - 1}
                       onClick={() => moveStep(row.key, 1)}
+                      title={`Bajar el paso ${index() + 1}`}
                     >
-                      <span aria-hidden="true">↓</span>
+                      <ActionIcon name="down" />
+                      <span class="sr-only">
+                        <span aria-hidden="true">↓</span>
+                      </span>
                     </button>
                     <button
                       type="button"
                       class="btn btn-quiet btn-small"
                       aria-label={`Quitar el paso ${index() + 1}`}
                       onClick={() => removeStep(row.key)}
+                      title={`Quitar el paso ${index() + 1}`}
                     >
-                      Quitar
+                      <ActionIcon name="delete" />
+                      <span class="sr-only">Quitar</span>
                     </button>
                   </div>
                 </div>
@@ -731,8 +1067,15 @@ export function RecipeForm(props: Props) {
             )}
           </For>
         </ol>
-        <button type="button" class="btn" id="add-step" onClick={addStep}>
-          + Agregar paso
+        <button
+          type="button"
+          class="btn"
+          id="add-step"
+          onClick={addStep}
+          title="+ Agregar paso"
+        >
+          <ActionIcon name="add" />
+          <span class="sr-only">+ Agregar paso</span>
         </button>
         <p class="sr-only" role="status">
           {announcement()}
@@ -743,14 +1086,23 @@ export function RecipeForm(props: Props) {
         <h2 id={`${ids}-categories`}>Categorías</h2>
         <fieldset class="check-group">
           <legend>{categoryKindLabels.dish_type}</legend>
-          <Show when={dishTypes().length > 0} fallback={<p class="hint">Aún no hay tipos de platillo. Créalos en Categorías.</p>}>
+          <Show
+            when={dishTypes().length > 0}
+            fallback={
+              <p class="hint">
+                Aún no hay tipos de platillo. Créalos en Categorías.
+              </p>
+            }
+          >
             <For each={dishTypes()}>
               {(category) => (
                 <label class="check">
                   <input
                     type="checkbox"
                     checked={form.categoryIds.includes(category.id)}
-                    onChange={(event) => toggleCategory(category.id, event.currentTarget.checked)}
+                    onChange={(event) =>
+                      toggleCategory(category.id, event.currentTarget.checked)
+                    }
                   />
                   <span>{category.name}</span>
                 </label>
@@ -760,14 +1112,21 @@ export function RecipeForm(props: Props) {
         </fieldset>
         <fieldset class="check-group">
           <legend>{categoryKindLabels.cuisine}</legend>
-          <Show when={cuisines().length > 0} fallback={<p class="hint">Aún no hay cocinas. Créalas en Categorías.</p>}>
+          <Show
+            when={cuisines().length > 0}
+            fallback={
+              <p class="hint">Aún no hay cocinas. Créalas en Categorías.</p>
+            }
+          >
             <For each={cuisines()}>
               {(category) => (
                 <label class="check">
                   <input
                     type="checkbox"
                     checked={form.categoryIds.includes(category.id)}
-                    onChange={(event) => toggleCategory(category.id, event.currentTarget.checked)}
+                    onChange={(event) =>
+                      toggleCategory(category.id, event.currentTarget.checked)
+                    }
                   />
                   <span>{category.name}</span>
                 </label>
@@ -808,8 +1167,10 @@ export function RecipeForm(props: Props) {
                       class="chip chip-suggest"
                       aria-label={`Confirmar la etiqueta ${tagLabels[tag]}`}
                       onClick={() => setTag(tag, true)}
+                      title={`Confirmar la etiqueta ${tagLabels[tag]}`}
                     >
-                      + {tagLabels[tag]}
+                      <ActionIcon name="confirm" />
+                      <span class="sr-only">+ {tagLabels[tag]}</span>
                     </button>
                   </li>
                 )}
@@ -819,29 +1180,62 @@ export function RecipeForm(props: Props) {
               <button
                 type="button"
                 class="btn btn-quiet btn-small"
-                onClick={() => suggestions().forEach((tag) => setTag(tag, true))}
+                onClick={() =>
+                  suggestions().forEach((tag) => setTag(tag, true))
+                }
+                title="Confirmar todas las sugeridas"
               >
-                Confirmar todas las sugeridas
+                <ActionIcon name="confirm" />
+                <span class="sr-only">Confirmar todas las sugeridas</span>
               </button>
             </Show>
           </Show>
           <Show when={unresolvedLines()}>
-            <p class="hint">Elige o crea todos los ingredientes para recibir sugerencias de etiquetas.</p>
+            <p class="hint">
+              Elige o crea todos los ingredientes para recibir sugerencias de
+              etiquetas.
+            </p>
           </Show>
           <Show when={!unresolvedLines() && unclassified().length > 0}>
             <p class="hint">
-              Para sugerir etiquetas falta clasificar en el catálogo: {unclassified().join(", ")}.
+              Para sugerir etiquetas falta clasificar en el catálogo:{" "}
+              {unclassified().join(", ")}.
             </p>
           </Show>
         </div>
       </section>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary" disabled={saving()}>
-          {saving() ? "Guardando…" : isEditing ? "Guardar cambios" : "Guardar receta"}
+        <button
+          type="submit"
+          class="btn btn-primary"
+          disabled={saving()}
+          title={
+            saving()
+              ? "Guardando…"
+              : isEditing
+                ? "Guardar cambios"
+                : "Guardar receta"
+          }
+        >
+          <ActionIcon name="save" />
+          <span class="sr-only">
+            {saving()
+              ? "Guardando…"
+              : isEditing
+                ? "Guardar cambios"
+                : "Guardar receta"}
+          </span>
         </button>
-        <button type="button" class="btn" disabled={saving()} onClick={() => void cancel()}>
-          Cancelar
+        <button
+          type="button"
+          class="btn"
+          disabled={saving()}
+          onClick={() => void cancel()}
+          title="Cancelar"
+        >
+          <ActionIcon name="close" />
+          <span class="sr-only">Cancelar</span>
         </button>
       </div>
     </form>

@@ -5,22 +5,28 @@ export type Route =
   | { name: "recipes" }
   | { name: "recipe"; id: string }
   | { name: "new" }
+  | { name: "capture" }
   | { name: "edit"; id: string }
   | { name: "menu" }
   | { name: "shopping" }
   | { name: "ingredients" }
   | { name: "categories" }
+  | { name: "backups" }
+  | { name: "account" }
   | { name: "missing" };
 
 export const paths = {
   recipes: "#/recetas",
   newRecipe: "#/recetas/nueva",
+  capture: "#/recetas/capturar",
   recipe: (id: string) => `#/recetas/${encodeURIComponent(id)}`,
   editRecipe: (id: string) => `#/recetas/${encodeURIComponent(id)}/editar`,
   menu: "#/menu",
   shopping: "#/compras",
   ingredients: "#/ingredientes",
   categories: "#/categorias",
+  backups: "#/respaldos",
+  account: "#/cuenta",
 } as const;
 
 function decode(segment: string): string | undefined {
@@ -40,7 +46,10 @@ export function parseHash(hash: string): Route {
   if (first === "compras" && segments.length === 1) return { name: "shopping" };
   if (first === "ingredientes" && segments.length === 1) return { name: "ingredients" };
   if (first === "categorias" && segments.length === 1) return { name: "categories" };
+  if (first === "respaldos" && segments.length === 1) return { name: "backups" };
+  if (first === "cuenta" && segments.length === 1) return { name: "account" };
   if (first === "recetas" && second === "nueva" && segments.length === 2) return { name: "new" };
+  if (first === "recetas" && second === "capturar" && segments.length === 2) return { name: "capture" };
   if (first === "recetas" && second !== undefined) {
     const id = decode(second);
     if (id === undefined) return { name: "missing" };

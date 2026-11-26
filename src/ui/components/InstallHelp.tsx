@@ -1,3 +1,4 @@
+import { ActionIcon } from "./ActionIcon";
 import { createUniqueId } from "solid-js";
 
 type Platform = { title: string; note?: string; steps: string[] };
@@ -35,7 +36,10 @@ const platforms: readonly Platform[] = [
   },
   {
     title: "Mac (Safari)",
-    steps: ["Abre esta página en Safari.", "En el menú Archivo, elige «Agregar al Dock» y confirma."],
+    steps: [
+      "Abre esta página en Safari.",
+      "En el menú Archivo, elige «Agregar al Dock» y confirma.",
+    ],
     note: "Necesitas una versión reciente de macOS y de Safari. En otros navegadores de escritorio puedes usar Recetario desde una pestaña.",
   },
 ];
@@ -63,13 +67,17 @@ export function InstallHelp() {
     <section class="panel install-help" aria-labelledby={`${id}-title`}>
       <h2 id={`${id}-title`}>Instalar y usar sin conexión</h2>
       <p>
-        Puedes agregar Recetario a tu pantalla de inicio para abrirlo como una app. Funciona igual desde una pestaña del navegador.
+        Puedes agregar Recetario a tu pantalla de inicio para abrirlo como una
+        app. Funciona igual desde una pestaña del navegador.
       </p>
 
       <h3>Cómo instalarla</h3>
       {platforms.map((platform) => (
         <details>
-          <summary>{platform.title}</summary>
+          <summary title={platform.title}>
+            <ActionIcon name="expand" />
+            <span class="sr-only">{platform.title}</span>
+          </summary>
           <ol>
             {platform.steps.map((step) => (
               <li>{step}</li>

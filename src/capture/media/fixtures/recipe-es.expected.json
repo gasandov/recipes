@@ -1,0 +1,18 @@
+{
+  "image": "recipe-es.png",
+  "language": "es",
+  "origin": "Synthetic image rendered by make-fixture.mjs. It contains no real person, recipe or photo.",
+  "lines": [
+    "Ingredientes",
+    "500 g de pechuga de pollo",
+    "2 tazas de arroz",
+    "1 cebolla",
+    "Sal al gusto",
+    "",
+    "Preparación",
+    "1. Cuece el pollo en agua con sal.",
+    "2. Dora la cebolla y agrega el arroz."
+  ],
+  "ingredients": ["pechuga de pollo", "arroz", "cebolla", "sal"],
+  "steps": 2
+}

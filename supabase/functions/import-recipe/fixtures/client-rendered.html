@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="es"><head><title>Receta cargada con JavaScript</title>
+<meta name="description" content="Ejemplo de página cuyos datos se agregan en el navegador.">
+</head><body>
+<nav>Inicio Recetas Contacto</nav>
+<div id="app"></div>
+<script>
+  // Structured data is injected here at runtime, so a plain HTTP fetch never sees it.
+  const data = document.createElement('script');
+  data.setAttribute('type', 'application/ld+json');
+  data.textContent = JSON.stringify({"@type":"Recipe","recipeIngredient":[]});
+  document.head.appendChild(data);
+</script>
+</body></html>

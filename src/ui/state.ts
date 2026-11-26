@@ -1,9 +1,11 @@
 import { createContext, createMemo, createSignal, onSettled } from "solid-js";
+import { announcePersonalDataChange } from "../data/personal-changes";
 import type { Accessor } from "solid-js";
 import type {
   Category, Ingredient, Library, MenuEntry, PhotoInput, Recipe, RecipeDraft, RecipeFilters,
 } from "../contracts";
 import { repository } from "../data/repository";
+import { invalidatePhotoUrls } from "./components/photos";
 
 export type LoadStatus = "loading" | "ready" | "error";
 export type Outcome<T> = { ok: true; value: T } | { ok: false };
@@ -91,7 +93,10 @@ export function createAppState(): AppState {
         console.error("Could not update the active menu.", error);
         return false;
       }
-      if (publish) menuChannel?.postMessage("updated");
+      if (publish) {
+        menuChannel?.postMessage("updated");
+        announcePersonalDataChange();
+      }
       return true;
     });
     menuQueue = next.then(() => {});
@@ -110,6 +115,8 @@ export function createAppState(): AppState {
   }
 
   async function reload(): Promise<boolean> {
+    // Restore and account sync refresh the library through this entry point.
+    invalidatePhotoUrls();
     const [libraryLoaded, menuLoaded] = await Promise.all([
       reloadLibrary(),
       updateMenu(repository.getActiveMenu),
@@ -130,6 +137,7 @@ export function createAppState(): AppState {
       console.error("A repository write failed.", error);
       return { ok: false };
     }
+    announcePersonalDataChange();
     if (!(await reloadLibrary())) {
       notify("error", "Se guardó el cambio, pero no pudimos actualizar la pantalla. Recarga la página.");
     }

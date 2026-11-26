@@ -1,6 +1,6 @@
 # Recetario
 
-A personal, installable web app for saving recipes, planning a weekly menu, and calculating a shopping list. It is a client-only PWA built with Solid 2, TypeScript, and Vite. User data lives in the browser's IndexedDB. The UI is in Mexican Spanish (`es-MX`), and code, tests, and documentation are in English. See the [implementation plan](PLAN.md) and the [post-v1 backlog](FUTURE.md).
+A personal, installable web app for saving recipes, planning a weekly menu, and calculating a shopping list. The Solid 2, TypeScript, and Vite PWA stores its working copy in IndexedDB. Manual recipes, menus, shopping, and backups work without an account or a backend. Supabase provides the optional account and online features. The UI is in Mexican Spanish (`es-MX`), and code, tests, and documentation are in English. See the [implementation plan](PLAN.md) and the [post-v1 backlog](FUTURE.md).
 
 ## Technical setup
 
@@ -47,6 +47,18 @@ npx playwright test e2e/planning.e2e.ts --project=iphone-webkit   # a single spe
 | `update` | A simulated release replaces the old cache after the app closes. Recipes, photos, the menu, and the shopping list remain available offline. |
 | `accessibility` | Skip link, focus on route change, keyboard-only recipe entry, error summary links, dialog focus, no horizontal overflow at 320 px on every view, minimum tap targets, Spanish-only chrome. |
 | `install-help` | Opens and checks the Spanish installation and storage help in the recipe library. |
+| `future-workflows` | Reviews a text draft with an unstated yield, keeps an incoming social link for manual entry, and restores a photo, an active menu, and partial shopping progress in a separate profile. |
+| `media-ocr` | Reads a known image and short video with on-device OCR in all three browsers and keeps media out of outgoing requests. |
+
+## Optional online features
+
+Copy `.env.example` to `.env.local` and set the project's public Supabase URL and publishable key to expose online features in the build. Put provider credentials in Supabase function secrets. The static site can still be built and used with these variables left empty.
+
+- [Account synchronization](src/sync/README.md) uses Google identity and a private Supabase account. Local edits, deletions and the shopping list sync after reconnecting.
+- [Recipe link import](supabase/functions/import-recipe/README.md) reads signed-in requests from the configured app origins and recipe sites. Instagram and Facebook links retain their sources and support pasted captions and manual entry. [Media capture](src/capture/media/README.md) reads screenshots, recipe images, and three frames from supported short clips on the device. The OCR reader files ship in `dist/ocr/` and are downloaded on first use.
+- [Recipe dictation](src/capture/voice/README.md) uses local recognition where the browser supports it. The optional cloud fallback goes through the authenticated `transcribe-recipe` function after consent for that recording.
+
+Run `deno check supabase/functions/import-recipe/index.ts supabase/functions/transcribe-recipe/index.ts` and `deno test supabase/functions/transcribe-recipe/handler_test.ts` for the function entry points and transcription unit tests. Vitest covers the link importer and its browser client.
 
 ## Static HTTPS deployment
 
@@ -127,8 +139,19 @@ Use a clean browser profile or device state for the first pass. Mark each item p
 ```
 src/domain/    rational arithmetic, units, aggregation, discovery (pure TypeScript)
 src/data/      IndexedDB schema, repository, seeds
+src/backup/    portable personal ZIPs, validation, and restore
+src/capture/   recipe draft sources and capture parsing
+src/shopping/  purchase progress, manual articles, and sharing
+src/sync/      account lifecycle, offline queue, and per-record sync
 src/ui/        Solid views, components, and es-MX text
 src/pwa/       service worker source and registration
+supabase/      optional backend and edge functions
 public/        manifest and icons
 e2e/           Playwright tests and the static test server
 ```
+
+## Icons
+
+Actions use the bundled Font Awesome Free solid icons by Fonticons, Inc. (CC BY 4.0 for SVG artwork).
+Spanish screen-reader labels and hover descriptions identify icon-only controls. The icons work offline.
+See [Font Awesome Free licensing](https://fontawesome.com/license/free) and the distributed [license](public/icons/fontawesome-LICENSE.txt).

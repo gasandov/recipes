@@ -6,6 +6,8 @@ import { createMenuEntry, normalizeMenuEntry } from "../domain/menu";
 import { nonblank, normalizeDensity, normalizeRecipe, validatePortions } from "../domain/recipes";
 import { activeMenuKey, databaseName, recipeDatabaseConnection, writeTransaction } from "./database";
 import { requestPersistentStorage } from "./persistent-storage";
+import { refreshActiveShopping } from "../shopping/repository";
+import { resetShoppingProgress } from "../shopping/workflow";
 
 function validatePhoto(photo: PhotoInput): void {
   if (!(photo.blob instanceof Blob) || !photo.blob.size || !photo.blob.type.startsWith("image/")) {
@@ -216,8 +218,16 @@ export function createRecipeRepository(name = databaseName): RecipeRepository {
       return changeMenu((entries) => entries.filter((entry) => entry.id !== id));
     },
 
-    clearActiveMenu() {
-      return changeMenu(() => []);
+    async clearActiveMenu() {
+      const entries = await writeTransaction(await getDatabase(), ["menu", "shopping"], async (tx) => {
+        const shopping = tx.objectStore("shopping");
+        const previous = await shopping.get(activeMenuKey);
+        await tx.objectStore("menu").put({ id: activeMenuKey, entries: [] });
+        if (previous) await shopping.put(resetShoppingProgress(previous), activeMenuKey);
+        return [];
+      });
+      if (name === databaseName) refreshActiveShopping();
+      return entries;
     },
   };
 }

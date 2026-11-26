@@ -1,17 +1,37 @@
+import { ActionIcon } from "../components/ActionIcon";
 import { createMemo, createSignal, createUniqueId, For, Show } from "solid-js";
 import { RECIPE_PORTIONS } from "../../contracts";
-import type { MeasuredAmount, Recipe, RecipeIngredient, UnitId } from "../../contracts";
-import { convertMeasuredAmount, defaultMetricUnit, formatMeasuredAmount, normalizeSourceUrl, usesDensity } from "../../domain";
+import type {
+  MeasuredAmount,
+  Recipe,
+  RecipeIngredient,
+  UnitId,
+} from "../../contracts";
+import {
+  convertMeasuredAmount,
+  defaultMetricUnit,
+  formatMeasuredAmount,
+  normalizeSourceUrl,
+  usesDensity,
+} from "../../domain";
 import { AddToMenuButton } from "../components/AddToMenuButton";
 import { PhotoImage } from "../components/PhotoImage";
 import { navigate, paths } from "../router";
-import { approximateDecimal, tagLabels, orderedUnits, unitLabel, unitOptionLabel } from "../text";
+import {
+  approximateDecimal,
+  tagLabels,
+  orderedUnits,
+  unitLabel,
+  unitOptionLabel,
+} from "../text";
 import { useApp } from "../use-app";
 
 export function RecipeDetail(props: { id: string }) {
   const app = useApp();
   const [leaving, setLeaving] = createSignal(false);
-  const recipe = createMemo(() => app.library().recipes.find((item) => item.id === props.id));
+  const recipe = createMemo(() =>
+    app.library().recipes.find((item) => item.id === props.id),
+  );
 
   async function remove(target: Recipe) {
     const accepted = await app.confirm({
@@ -39,14 +59,21 @@ export function RecipeDetail(props: { id: string }) {
           <section class="empty-state">
             <h1 tabindex="-1">No encontramos esta receta</h1>
             <p>Puede que ya se haya eliminado.</p>
-            <a class="btn btn-primary" href={paths.recipes}>
-              Volver a Recetas
+            <a
+              class="btn btn-primary"
+              href={paths.recipes}
+              title="Volver a Recetas"
+            >
+              <ActionIcon name="recipes" />
+              <span class="sr-only">Volver a Recetas</span>
             </a>
           </section>
         </Show>
       }
     >
-      {(current) => <RecipeView recipe={current} onDelete={() => void remove(current)} />}
+      {(current) => (
+        <RecipeView recipe={current} onDelete={() => void remove(current)} />
+      )}
     </Show>
   );
 }
@@ -74,19 +101,38 @@ function RecipeView(props: { recipe: Recipe; onDelete: () => void }) {
       <header class="detail-head">
         <h1 tabindex="-1">{props.recipe.name}</h1>
         <div class="actions">
-          <AddToMenuButton recipeId={props.recipe.id} recipeName={props.recipe.name} primary />
-          <a class="btn" href={paths.editRecipe(props.recipe.id)}>
-            Editar
+          <AddToMenuButton
+            recipeId={props.recipe.id}
+            recipeName={props.recipe.name}
+            primary
+          />
+          <a
+            class="btn"
+            href={paths.editRecipe(props.recipe.id)}
+            title="Editar"
+          >
+            <ActionIcon name="edit" />
+            <span class="sr-only">Editar</span>
           </a>
-          <button type="button" class="btn btn-danger-quiet" onClick={props.onDelete}>
-            Eliminar
+          <button
+            type="button"
+            class="btn btn-danger-quiet"
+            onClick={props.onDelete}
+            title="Eliminar"
+          >
+            <ActionIcon name="delete" />
+            <span class="sr-only">Eliminar</span>
           </button>
         </div>
       </header>
 
       <Show when={props.recipe.photoId}>
         <div class="detail-photo">
-          <PhotoImage photoId={props.recipe.photoId} alt={`Foto de ${props.recipe.name}`} fallback={null} />
+          <PhotoImage
+            photoId={props.recipe.photoId}
+            alt={`Foto de ${props.recipe.name}`}
+            fallback={null}
+          />
         </div>
       </Show>
 
@@ -122,14 +168,22 @@ function RecipeView(props: { recipe: Recipe; onDelete: () => void }) {
           when={props.recipe.ingredients.length > 0}
           fallback={
             <p class="empty-inline">
-              Esta receta aún no tiene ingredientes. <a href={paths.editRecipe(props.recipe.id)}>Agrégalos al editarla</a>.
+              Esta receta aún no tiene ingredientes.{" "}
+              <a href={paths.editRecipe(props.recipe.id)}>
+                Agrégalos al editarla
+              </a>
+              .
             </p>
           }
         >
           <ul class="ingredient-list">
-            <For each={props.recipe.ingredients}>{(line) => <IngredientRow line={line} />}</For>
+            <For each={props.recipe.ingredients}>
+              {(line) => <IngredientRow line={line} />}
+            </For>
           </ul>
-          <p class="hint">Cambiar la unidad ajusta cómo se muestra la cantidad.</p>
+          <p class="hint">
+            Cambiar la unidad ajusta cómo se muestra la cantidad.
+          </p>
         </Show>
       </section>
 
@@ -139,7 +193,11 @@ function RecipeView(props: { recipe: Recipe; onDelete: () => void }) {
           when={props.recipe.steps.length > 0}
           fallback={
             <p class="empty-inline">
-              Esta receta aún no tiene pasos. <a href={paths.editRecipe(props.recipe.id)}>Agrégalos al editarla</a>.
+              Esta receta aún no tiene pasos.{" "}
+              <a href={paths.editRecipe(props.recipe.id)}>
+                Agrégalos al editarla
+              </a>
+              .
             </p>
           }
         >
@@ -165,7 +223,9 @@ function IngredientRow(props: { line: RecipeIngredient }) {
     const amount = measured();
     if (!amount) return [];
     const density = ingredient()?.density;
-    return orderedUnits.filter((unit) => convertMeasuredAmount(amount, unit, density) !== undefined);
+    return orderedUnits.filter(
+      (unit) => convertMeasuredAmount(amount, unit, density) !== undefined,
+    );
   });
 
   const shown = createMemo(() => {
@@ -174,13 +234,19 @@ function IngredientRow(props: { line: RecipeIngredient }) {
     const unit = chosen() ?? defaultMetricUnit(amount);
     if (unit === amount.unit) return { amount, converted: false };
     const result = convertMeasuredAmount(amount, unit, ingredient()?.density);
-    return result ? { amount: result, converted: true } : { amount, converted: false };
+    return result
+      ? { amount: result, converted: true }
+      : { amount, converted: false };
   });
 
   const approximate = () => {
     const amount = measured();
     const current = shown();
-    return Boolean(amount && current?.converted && usesDensity(amount.unit, current.amount.unit));
+    return Boolean(
+      amount &&
+        current?.converted &&
+        usesDensity(amount.unit, current.amount.unit),
+    );
   };
 
   const exactQuantity = () => {
@@ -193,17 +259,24 @@ function IngredientRow(props: { line: RecipeIngredient }) {
     const current = shown();
     if (!current) return "";
     const exact = exactQuantity();
-    const longFraction = [...exact.matchAll(/\/(\d+)/g)].some((match) => Number(match[1]) > 16);
+    const longFraction = [...exact.matchAll(/\/(\d+)/g)].some(
+      (match) => Number(match[1]) > 16,
+    );
     if (!current.converted || !longFraction) return exact;
     const min = approximateDecimal(current.amount.min);
-    const max = current.amount.max ? approximateDecimal(current.amount.max) : "";
-    if (!min || min === "0" || (current.amount.max && (!max || max === "0"))) return exact;
+    const max = current.amount.max
+      ? approximateDecimal(current.amount.max)
+      : "";
+    if (!min || min === "0" || (current.amount.max && (!max || max === "0")))
+      return exact;
     return `≈ ${max ? `${min}–${max}` : min}`;
   });
 
   const unitText = () => {
     const current = shown();
-    return current ? unitLabel(current.amount.unit, current.amount.max ?? current.amount.min) : "";
+    return current
+      ? unitLabel(current.amount.unit, current.amount.max ?? current.amount.min)
+      : "";
   };
 
   return (
@@ -219,7 +292,14 @@ function IngredientRow(props: { line: RecipeIngredient }) {
               <span class="sr-only"> (aproximado)</span>
             </Show>
           </Show>
-          <Show when={props.line.amount.kind === "qualitative" ? props.line.amount : undefined} keyed>
+          <Show
+            when={
+              props.line.amount.kind === "qualitative"
+                ? props.line.amount
+                : undefined
+            }
+            keyed
+          >
             {(amount) => <em>{amount.text}</em>}
           </Show>
         </span>
@@ -238,7 +318,9 @@ function IngredientRow(props: { line: RecipeIngredient }) {
               id={selectId}
               class="control control-small"
               value={shown()?.amount.unit}
-              onChange={(event) => setChosen(event.currentTarget.value as UnitId)}
+              onChange={(event) =>
+                setChosen(event.currentTarget.value as UnitId)
+              }
             >
               <For each={options()}>
                 {(unit) => (
@@ -254,18 +336,27 @@ function IngredientRow(props: { line: RecipeIngredient }) {
       </div>
       <Show when={!approximate() && quantityText().startsWith("≈")}>
         <details class="approx-note">
-          <summary>Ver cantidad exacta</summary>
-          <p class="source-text">{exactQuantity()} {unitText()}</p>
+          <summary title="Ver cantidad exacta">
+            <ActionIcon name="expand" />
+            <span class="sr-only">Ver cantidad exacta</span>
+          </summary>
+          <p class="source-text">
+            {exactQuantity()} {unitText()}
+          </p>
         </details>
       </Show>
       <Show when={approximate() ? ingredient()?.density : undefined} keyed>
         {(density) => (
           <div class="approx-note">
             <p>
-              <strong>Aproximado:</strong> usa la densidad de {name()} ({approximateDecimal(density.gramsPerMilliliter)} g/ml).
+              <strong>Aproximado:</strong> usa la densidad de {name()} (
+              {approximateDecimal(density.gramsPerMilliliter)} g/ml).
             </p>
             <details>
-              <summary>Fuente de la densidad</summary>
+              <summary title="Fuente de la densidad">
+                <ActionIcon name="expand" />
+                <span class="sr-only">Fuente de la densidad</span>
+              </summary>
               <p class="source-text">{density.source}</p>
             </details>
           </div>

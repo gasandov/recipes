@@ -1,0 +1,73 @@
+.shopping-view .shopping-toolbar {
+  margin-bottom: 1rem;
+}
+
+.shopping-view .shopping-entry {
+  border-top: 1px solid var(--line);
+  padding: 0.75rem 0;
+}
+
+.shopping-view .shopping-entry:last-child {
+  padding-bottom: 0;
+}
+
+.shopping-view .shopping-required > .hint {
+  display: block;
+  margin: 0;
+}
+
+.shopping-view .shopping-remaining {
+  margin-bottom: 0.5rem;
+}
+
+.shopping-view .shopping-balances,
+.shopping-view .shopping-manual-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+}
+
+.shopping-view .shopping-manual-items {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.shopping-view .shopping-manual-item {
+  justify-content: space-between;
+  padding: 0.25rem 0;
+}
+
+.shopping-view .shopping-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  width: fit-content;
+  margin: 0;
+}
+
+.shopping-view .shopping-check input {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin: 0;
+}
+
+.shopping-view .shopping-fields {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.75rem;
+}
+
+.shopping-view .shopping-fields > .field {
+  flex: 1 1 9rem;
+}
+
+.shopping-view .shopping-dialog-actions {
+  margin-top: 0.75rem;
+}
+
+.shopping-view .shopping-share-text {
+  min-height: 10rem;
+}

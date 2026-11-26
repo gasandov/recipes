@@ -1,3 +1,4 @@
+import { ActionIcon } from "../components/ActionIcon";
 import { createMemo, createSignal, createUniqueId, For, Show } from "solid-js";
 import type { Recipe, RecipeFilters, TagId } from "../../contracts";
 import { filterRecipes } from "../../domain";
@@ -7,7 +8,14 @@ import { InstallHelp } from "../components/InstallHelp";
 import { PhotoImage } from "../components/PhotoImage";
 import { emptyFilters } from "../state";
 import { paths } from "../router";
-import { categoryKindLabels, compareNames, ingredientCount, orderedTags, recipeCount, tagLabels } from "../text";
+import {
+  categoryKindLabels,
+  compareNames,
+  ingredientCount,
+  orderedTags,
+  recipeCount,
+  tagLabels,
+} from "../text";
 import { useApp } from "../use-app";
 
 type ActiveFilter = { key: string; label: string; remove: () => void };
@@ -23,7 +31,8 @@ export function RecipeList() {
   const [panelOpen, setPanelOpen] = createSignal(false);
   const [ingredientText, setIngredientText] = createSignal("");
 
-  const update = (patch: Partial<RecipeFilters>) => app.setFilters({ ...app.filters(), ...patch });
+  const update = (patch: Partial<RecipeFilters>) =>
+    app.setFilters({ ...app.filters(), ...patch });
 
   // Drop filter IDs whose category or ingredient was deleted, so they cannot hide every recipe unseen.
   const effective = createMemo<RecipeFilters>(() => {
@@ -40,13 +49,21 @@ export function RecipeList() {
   });
 
   const results = createMemo(() =>
-    filterRecipes(app.library(), effective()).sort((a, b) => compareNames(a.name, b.name)),
+    filterRecipes(app.library(), effective()).sort((a, b) =>
+      compareNames(a.name, b.name),
+    ),
   );
   const dishTypes = createMemo(() =>
-    app.library().categories.filter((category) => category.kind === "dish_type").sort((a, b) => compareNames(a.name, b.name)),
+    app
+      .library()
+      .categories.filter((category) => category.kind === "dish_type")
+      .sort((a, b) => compareNames(a.name, b.name)),
   );
   const cuisines = createMemo(() =>
-    app.library().categories.filter((category) => category.kind === "cuisine").sort((a, b) => compareNames(a.name, b.name)),
+    app
+      .library()
+      .categories.filter((category) => category.kind === "cuisine")
+      .sort((a, b) => compareNames(a.name, b.name)),
   );
 
   const activeFilters = createMemo<ActiveFilter[]>(() => {
@@ -54,30 +71,69 @@ export function RecipeList() {
     const list: ActiveFilter[] = [];
     for (const id of filters.dishTypeIds) {
       const name = app.categoriesById().get(id)?.name;
-      if (name) list.push({ key: `d-${id}`, label: name, remove: () => update({ dishTypeIds: toggle(app.filters().dishTypeIds, id, false) }) });
+      if (name)
+        list.push({
+          key: `d-${id}`,
+          label: name,
+          remove: () =>
+            update({
+              dishTypeIds: toggle(app.filters().dishTypeIds, id, false),
+            }),
+        });
     }
     for (const id of filters.cuisineIds) {
       const name = app.categoriesById().get(id)?.name;
-      if (name) list.push({ key: `c-${id}`, label: name, remove: () => update({ cuisineIds: toggle(app.filters().cuisineIds, id, false) }) });
+      if (name)
+        list.push({
+          key: `c-${id}`,
+          label: name,
+          remove: () =>
+            update({ cuisineIds: toggle(app.filters().cuisineIds, id, false) }),
+        });
     }
     for (const tag of filters.tagIds) {
-      list.push({ key: `t-${tag}`, label: tagLabels[tag], remove: () => update({ tagIds: toggle(app.filters().tagIds, tag, false) }) });
+      list.push({
+        key: `t-${tag}`,
+        label: tagLabels[tag],
+        remove: () =>
+          update({ tagIds: toggle(app.filters().tagIds, tag, false) }),
+      });
     }
     for (const id of filters.ingredientIds) {
       const name = app.ingredientsById().get(id)?.name;
-      if (name) list.push({ key: `i-${id}`, label: name, remove: () => update({ ingredientIds: toggle(app.filters().ingredientIds, id, false) }) });
+      if (name)
+        list.push({
+          key: `i-${id}`,
+          label: name,
+          remove: () =>
+            update({
+              ingredientIds: toggle(app.filters().ingredientIds, id, false),
+            }),
+        });
     }
     return list;
   });
-  const hasFilters = () => activeFilters().length > 0 || effective().query.trim() !== "";
+  const hasFilters = () =>
+    activeFilters().length > 0 || effective().query.trim() !== "";
 
   return (
     <>
       <div class="page-head">
         <h1 tabindex="-1">Recetas</h1>
-        <a class="btn btn-primary" href={paths.newRecipe}>
-          Nueva receta
-        </a>
+        <div class="actions">
+          <a class="btn" href={paths.capture} title="Dictar o importar">
+            <ActionIcon name="microphone" />
+            <span class="sr-only">Dictar o importar</span>
+          </a>
+          <a
+            class="btn btn-primary"
+            href={paths.newRecipe}
+            title="Nueva receta"
+          >
+            <ActionIcon name="add" />
+            <span class="sr-only">Nueva receta</span>
+          </a>
+        </div>
       </div>
 
       <Show
@@ -85,9 +141,17 @@ export function RecipeList() {
         fallback={
           <section class="empty-state">
             <h2>Aún no tienes recetas</h2>
-            <p>Guarda la primera receta para armar tu recetario. Solo el nombre es obligatorio.</p>
-            <a class="btn btn-primary" href={paths.newRecipe}>
-              Crear mi primera receta
+            <p>
+              Guarda la primera receta para armar tu recetario. Solo el nombre
+              es obligatorio.
+            </p>
+            <a
+              class="btn btn-primary"
+              href={paths.newRecipe}
+              title="Crear mi primera receta"
+            >
+              <ActionIcon name="add" />
+              <span class="sr-only">Crear mi primera receta</span>
             </a>
           </section>
         }
@@ -110,15 +174,31 @@ export function RecipeList() {
             aria-expanded={panelOpen() ? "true" : "false"}
             aria-controls={`${ids}-filters`}
             onClick={() => setPanelOpen(!panelOpen())}
+            title={
+              "Filtros" +
+              " " +
+              String(
+                activeFilters().length > 0
+                  ? ` (${activeFilters().length})`
+                  : "",
+              )
+            }
           >
-            Filtros{activeFilters().length > 0 ? ` (${activeFilters().length})` : ""}
+            <ActionIcon name="filter" />
+            <span class="sr-only">
+              Filtros
+              {activeFilters().length > 0 ? ` (${activeFilters().length})` : ""}
+            </span>
           </button>
         </div>
 
         <div id={`${ids}-filters`} class="filter-panel" hidden={!panelOpen()}>
           <fieldset class="check-group">
             <legend>{categoryKindLabels.dish_type}</legend>
-            <Show when={dishTypes().length > 0} fallback={<p class="hint">Sin tipos de platillo.</p>}>
+            <Show
+              when={dishTypes().length > 0}
+              fallback={<p class="hint">Sin tipos de platillo.</p>}
+            >
               <For each={dishTypes()}>
                 {(category) => (
                   <label class="check">
@@ -126,7 +206,13 @@ export function RecipeList() {
                       type="checkbox"
                       checked={app.filters().dishTypeIds.includes(category.id)}
                       onChange={(event) =>
-                        update({ dishTypeIds: toggle(app.filters().dishTypeIds, category.id, event.currentTarget.checked) })
+                        update({
+                          dishTypeIds: toggle(
+                            app.filters().dishTypeIds,
+                            category.id,
+                            event.currentTarget.checked,
+                          ),
+                        })
                       }
                     />
                     <span>{category.name}</span>
@@ -137,7 +223,10 @@ export function RecipeList() {
           </fieldset>
           <fieldset class="check-group">
             <legend>{categoryKindLabels.cuisine}</legend>
-            <Show when={cuisines().length > 0} fallback={<p class="hint">Sin cocinas.</p>}>
+            <Show
+              when={cuisines().length > 0}
+              fallback={<p class="hint">Sin cocinas.</p>}
+            >
               <For each={cuisines()}>
                 {(category) => (
                   <label class="check">
@@ -145,7 +234,13 @@ export function RecipeList() {
                       type="checkbox"
                       checked={app.filters().cuisineIds.includes(category.id)}
                       onChange={(event) =>
-                        update({ cuisineIds: toggle(app.filters().cuisineIds, category.id, event.currentTarget.checked) })
+                        update({
+                          cuisineIds: toggle(
+                            app.filters().cuisineIds,
+                            category.id,
+                            event.currentTarget.checked,
+                          ),
+                        })
                       }
                     />
                     <span>{category.name}</span>
@@ -162,7 +257,15 @@ export function RecipeList() {
                   <input
                     type="checkbox"
                     checked={app.filters().tagIds.includes(tag)}
-                    onChange={(event) => update({ tagIds: toggle(app.filters().tagIds, tag, event.currentTarget.checked) })}
+                    onChange={(event) =>
+                      update({
+                        tagIds: toggle(
+                          app.filters().tagIds,
+                          tag,
+                          event.currentTarget.checked,
+                        ),
+                      })
+                    }
                   />
                   <span>{tagLabels[tag]}</span>
                 </label>
@@ -181,13 +284,20 @@ export function RecipeList() {
               describedBy={`${ids}-ingredient-hint`}
               onInput={setIngredientText}
               onPick={(ingredient) => {
-                update({ ingredientIds: toggle(app.filters().ingredientIds, ingredient.id, true) });
+                update({
+                  ingredientIds: toggle(
+                    app.filters().ingredientIds,
+                    ingredient.id,
+                    true,
+                  ),
+                });
                 setIngredientText("");
               }}
               onCreate={async () => {}}
             />
             <p class="hint" id={`${ids}-ingredient-hint`}>
-              Un ingrediente general, como pollo, también encuentra recetas con sus cortes.
+              Un ingrediente general, como pollo, también encuentra recetas con
+              sus cortes.
             </p>
           </div>
         </div>
@@ -202,8 +312,12 @@ export function RecipeList() {
                     class="chip chip-removable"
                     aria-label={`Quitar el filtro ${filter.label}`}
                     onClick={filter.remove}
+                    title={`Quitar el filtro ${filter.label}`}
                   >
-                    {filter.label} <span aria-hidden="true">×</span>
+                    <ActionIcon name="close" />
+                    <span class="sr-only">
+                      {filter.label} <span aria-hidden="true">×</span>
+                    </span>
                   </button>
                 </li>
               )}
@@ -223,8 +337,10 @@ export function RecipeList() {
                 app.setFilters(emptyFilters);
                 setIngredientText("");
               }}
+              title="Limpiar búsqueda y filtros"
             >
-              Limpiar búsqueda y filtros
+              <ActionIcon name="filter" />
+              <span class="sr-only">Limpiar búsqueda y filtros</span>
             </button>
           </Show>
         </div>
@@ -239,13 +355,31 @@ export function RecipeList() {
           }
         >
           <ul class="card-grid">
-            <For each={results()}>{(recipe) => <RecipeCard recipe={recipe} />}</For>
+            <For each={results()}>
+              {(recipe) => <RecipeCard recipe={recipe} />}
+            </For>
           </ul>
         </Show>
       </Show>
-      <p class="hint">Tus recetas se guardan en este dispositivo. Si borras los datos del sitio en tu navegador, puedes perderlas.</p>
+      <div class="actions">
+        <a class="btn btn-quiet" href={paths.backups} title="Respaldos">
+          <ActionIcon name="download" />
+          <span class="sr-only">Respaldos</span>
+        </a>
+        <a class="btn btn-quiet" href={paths.account} title="Cuenta">
+          <ActionIcon name="account" />
+          <span class="sr-only">Cuenta</span>
+        </a>
+      </div>
+      <p class="hint">
+        Tus recetas se guardan en este dispositivo. Si borras los datos del
+        sitio en tu navegador, puedes perderlas.
+      </p>
       <details class="library-help">
-        <summary>Ayuda de instalación y almacenamiento</summary>
+        <summary title="Ayuda de instalación y almacenamiento">
+          <ActionIcon name="expand" />
+          <span class="sr-only">Ayuda de instalación y almacenamiento</span>
+        </summary>
         <InstallHelp />
       </details>
     </>
@@ -267,7 +401,11 @@ function RecipeCard(props: { recipe: Recipe }) {
           <PhotoImage
             photoId={props.recipe.photoId}
             alt=""
-            fallback={<span class="card-initial" aria-hidden="true">{props.recipe.name.trim().charAt(0).toLocaleUpperCase("es-MX")}</span>}
+            fallback={
+              <span class="card-initial" aria-hidden="true">
+                {props.recipe.name.trim().charAt(0).toLocaleUpperCase("es-MX")}
+              </span>
+            }
           />
         </div>
         <div class="card-body">
@@ -276,15 +414,22 @@ function RecipeCard(props: { recipe: Recipe }) {
             <p class="card-meta">{categories()}</p>
           </Show>
           <Show when={props.recipe.tags.length > 0}>
-            <p class="card-tags">{props.recipe.tags.map((tag) => tagLabels[tag]).join(" · ")}</p>
+            <p class="card-tags">
+              {props.recipe.tags.map((tag) => tagLabels[tag]).join(" · ")}
+            </p>
           </Show>
           <p class="card-meta">
-            {props.recipe.ingredients.length > 0 ? ingredientCount(props.recipe.ingredients.length) : "Sin ingredientes"}
+            {props.recipe.ingredients.length > 0
+              ? ingredientCount(props.recipe.ingredients.length)
+              : "Sin ingredientes"}
           </p>
         </div>
       </a>
       <div class="card-actions">
-        <AddToMenuButton recipeId={props.recipe.id} recipeName={props.recipe.name} />
+        <AddToMenuButton
+          recipeId={props.recipe.id}
+          recipeName={props.recipe.name}
+        />
       </div>
     </li>
   );

@@ -1,7 +1,12 @@
+import { ActionIcon } from "./ActionIcon";
 import { createSignal } from "solid-js";
 import { useApp } from "../use-app";
 
-export function AddToMenuButton(props: { recipeId: string; recipeName: string; primary?: boolean }) {
+export function AddToMenuButton(props: {
+  recipeId: string;
+  recipeName: string;
+  primary?: boolean;
+}) {
   const app = useApp();
   const [adding, setAdding] = createSignal(false);
 
@@ -14,7 +19,10 @@ export function AddToMenuButton(props: { recipeId: string; recipeName: string; p
     if (saved) {
       app.notify("success", `Se agregó «${recipeName}» al menú.`);
     } else {
-      app.notify("error", "No se pudo agregar la receta al menú. Inténtalo de nuevo.");
+      app.notify(
+        "error",
+        "No se pudo agregar la receta al menú. Inténtalo de nuevo.",
+      );
     }
   }
 
@@ -25,8 +33,10 @@ export function AddToMenuButton(props: { recipeId: string; recipeName: string; p
       aria-label={`Agregar al menú: ${props.recipeName}`}
       aria-disabled={adding() ? "true" : undefined}
       onClick={() => void add()}
+      title={`Agregar al menú: ${props.recipeName}`}
     >
-      Agregar al menú
+      <ActionIcon name="menu" />
+      <span class="sr-only">Agregar al menú</span>
     </button>
   );
 }

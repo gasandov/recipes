@@ -273,7 +273,7 @@ describe("IndexedDB recipe repository", () => {
     const db = await recipeDatabaseConnection(name)();
     try {
       expect(db.version).toBe(databaseVersion);
-      expect([...db.objectStoreNames]).toEqual(["categories", "ingredients", "menu", "photos", "recipes"]);
+      expect([...db.objectStoreNames]).toEqual(["categories", "ingredients", "menu", "photos", "recipes", "shopping"]);
     } finally {
       db.close();
     }
